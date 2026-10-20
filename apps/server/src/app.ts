@@ -50,7 +50,7 @@ export async function buildApp({ db, config }: { db: Db; config: Config }) {
   await app.register(ledgerRoutes, { db });
 
   if (config.webDist && existsSync(config.webDist)) {
-    await app.register(fastifyStatic, { root: config.webDist, wildcard: false });
+    await app.register(fastifyStatic, { root: config.webDist });
     // 클라이언트 라우팅: API가 아닌 경로는 index.html로 돌려준다.
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith("/api/")) return reply.status(404).send({ message: "존재하지 않는 API입니다." });

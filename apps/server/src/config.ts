@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 export interface Config {
   port: number;
   databaseUrl: string;
@@ -23,6 +25,6 @@ export function loadConfig(): Config {
     googleClientId: process.env.GOOGLE_CLIENT_ID || null,
     devLogin: process.env.DEV_LOGIN === "true",
     publicUrl: process.env.PUBLIC_URL ?? "http://localhost:4300",
-    webDist: process.env.WEB_DIST || null,
+    webDist: process.env.WEB_DIST ? resolve(process.env.WEB_DIST) : null,
   };
 }
