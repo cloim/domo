@@ -1,4 +1,4 @@
-import { ChevronRight, CreditCard, House, Info, QrCode, Repeat, Shapes, Users } from "lucide-react";
+import { BellRing, Bot, ChevronRight, CreditCard, House, Info, QrCode, Repeat, Shapes, Users, Wand2 } from "lucide-react";
 import { NavLink, useOutletContext, useParams } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
 import { useHousehold, type Me } from "../../lib/queries.ts";
@@ -6,6 +6,10 @@ import { useMedia } from "../../lib/useMedia.ts";
 import { AppSection } from "./AppSection.tsx";
 import { CategoriesSection } from "./CategoriesSection.tsx";
 import { FixedExpensesSection } from "./FixedExpensesSection.tsx";
+import { AiSection } from "./notify/AiSection.tsx";
+import { NotifySection } from "./notify/NotifySection.tsx";
+import { TemplatesSection } from "./notify/TemplatesSection.tsx";
+import { notifySupported } from "../../lib/notify.ts";
 import { HouseholdSection, MembersSection } from "./HouseholdSections.tsx";
 import { InviteSection } from "./InviteSection.tsx";
 import { PaymentMethodsSection } from "./PaymentMethodsSection.tsx";
@@ -20,7 +24,7 @@ interface Section {
   render: () => React.ReactNode;
 }
 
-const GROUPS: { title: string; items: Section[] }[] = [
+const GROUPS: { title: string; nativeOnly?: boolean; items: Section[] }[] = [
   {
     title: "가계",
     items: [
@@ -37,10 +41,21 @@ const GROUPS: { title: string; items: Section[] }[] = [
       { id: "fixed-expenses", label: "고정지출", icon: Repeat, fill: true, render: () => <FixedExpensesSection /> },
     ],
   },
+  {
+    title: "자동 기록",
+    // 다른 앱의 알림을 읽는 기능이라 안드로이드 앱에서만 보인다.
+    nativeOnly: true,
+    items: [
+      { id: "notify", label: "알림 연동", icon: BellRing, fill: true, render: () => <NotifySection /> },
+      { id: "notify-templates", label: "알림 템플릿", icon: Wand2, fill: true, render: () => <TemplatesSection /> },
+      { id: "ai", label: "AI 설정", icon: Bot, render: () => <AiSection /> },
+    ],
+  },
   { title: "앱", items: [{ id: "app", label: "앱 정보와 업데이트", icon: Info, render: () => <AppSection /> }] },
 ];
 
 const DEFAULT_SECTION = "household";
+const VISIBLE_GROUPS = GROUPS.filter((g) => !g.nativeOnly || notifySupported);
 
 export function SettingsPage() {
   const me = useOutletContext<Me>();
@@ -48,7 +63,7 @@ export function SettingsPage() {
   const household = useHousehold();
   const twoPane = useMedia("(min-width: 960px)");
   const isOwner = household.data?.me.role === "owner";
-  const sections = GROUPS.flatMap((g) => g.items).filter((s) => !s.ownerOnly || isOwner);
+  const sections = VISIBLE_GROUPS.flatMap((g) => g.items).filter((s) => !s.ownerOnly || isOwner);
   // 넓은 화면에서는 /settings 에서도 첫 항목 내용을 함께 보여준다.
   const active = sections.find((s) => s.id === (section ?? DEFAULT_SECTION));
 
@@ -58,7 +73,7 @@ export function SettingsPage() {
       <div className="content">
         <div className={`settings${section ? " has-detail" : ""}`}>
           <nav className="settings-nav" aria-label="설정 항목">
-            {GROUPS.map((g) => {
+            {VISIBLE_GROUPS.map((g) => {
               const items = g.items.filter((s) => !s.ownerOnly || isOwner);
               return (
                 <div key={g.title} className="settings-group">

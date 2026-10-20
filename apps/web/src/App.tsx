@@ -6,6 +6,7 @@ import { useMe } from "./lib/queries.ts";
 import { LoginPage } from "./pages/gate/LoginPage.tsx";
 import { OnboardingPage } from "./pages/gate/OnboardingPage.tsx";
 import { pendingInvite } from "./pages/gate/pendingInvite.ts";
+import { DomoNotify, notifySupported } from "./lib/notify.ts";
 import { RecordsPage } from "./pages/records/RecordsPage.tsx";
 import { SettingsPage } from "./pages/settings/SettingsPage.tsx";
 import logoUrl from "./assets/logo.svg";
@@ -56,6 +57,14 @@ function JoinLink() {
 function SignedIn() {
   const me = useMe(true);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // 등록 알림을 누르면 채워진 입력 화면으로 보낸다. 앱이 꺼져 있다가 열린 경우도 플러그인이 보관해 두었다가 전달한다.
+  useEffect(() => {
+    if (!notifySupported) return;
+    const handle = DomoNotify.addListener("prefill", (prefill) => navigate("/records", { state: { prefill } }));
+    return () => void handle.then((h) => h.remove());
+  }, [navigate]);
 
   if (me.isPending) return <Splash />;
   if (me.isError) {

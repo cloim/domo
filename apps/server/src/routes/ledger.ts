@@ -9,7 +9,7 @@ import {
   type PaymentMethodInput,
   type TransactionInput,
 } from "@domo/core";
-import { and, count, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/client.ts";
@@ -67,6 +67,19 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
         ),
       );
     return rows.map(toDto);
+  });
+
+  /** 같은 거래처의 가장 최근 기록으로 분류와 지출수단을 추천한다(알림 등록 화면용). */
+  app.get("/api/transactions/suggest", async (req) => {
+    const me = await requireMember(db, req);
+    const { counterparty, kind } = parse(z.object({ counterparty: z.string().trim().min(1).max(60), kind: z.enum(["expense", "income"]) }), req.query);
+    const [row] = await db
+      .select({ categoryId: transactions.categoryId, paymentMethodId: transactions.paymentMethodId })
+      .from(transactions)
+      .where(and(eq(transactions.householdId, me.householdId), eq(transactions.kind, kind), eq(transactions.counterparty, counterparty)))
+      .orderBy(desc(transactions.occurredAt))
+      .limit(1);
+    return row ?? { categoryId: null, paymentMethodId: null };
   });
 
   app.post("/api/transactions", async (req) => {

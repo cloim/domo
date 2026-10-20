@@ -12,14 +12,14 @@ import {
 } from "@domo/core";
 import { NotebookPen, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useOutletContext, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useOutletContext, useSearchParams } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
 import { MonthSwitch } from "../../components/MonthSwitch.tsx";
 import { Sheet } from "../../components/Sheet.tsx";
 import { formatTime, formatWon, isWeekend, weekdayOf } from "../../lib/format.ts";
 import { useHousehold, useTransactions, type HouseholdData, type Me } from "../../lib/queries.ts";
 import { useMedia, WIDE_EDITOR } from "../../lib/useMedia.ts";
-import { EntryForm, type Suggestion } from "./EntryForm.tsx";
+import { EntryForm, type EntryPrefill, type Suggestion } from "./EntryForm.tsx";
 
 const KINDS: { kind: TransactionKind; label: string }[] = [
   { kind: "expense", label: "지출" },
@@ -40,6 +40,23 @@ export function RecordsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [flashId, setFlashId] = useState<string | null>(null);
+  const [prefill, setPrefill] = useState<EntryPrefill | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // 등록 알림을 눌러 들어오면 그 달과 탭으로 옮기고 채워진 입력 화면을 연다.
+  useEffect(() => {
+    const incoming = (location.state as { prefill?: EntryPrefill } | null)?.prefill;
+    if (!incoming) return;
+    setPrefill(incoming);
+    setSelectedId(null);
+    if (!wide) setSheetOpen(true);
+    const p = new URLSearchParams(params);
+    p.set("m", incoming.occurredAt.slice(0, 7));
+    p.set("tab", incoming.kind);
+    navigate({ pathname: location.pathname, search: p.toString() }, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   const entries = useMemo(() => expandEntries(txs.data ?? [], range), [txs.data, range]);
   const totals = useMemo(() => totalsByKind(entries), [entries]);
@@ -65,11 +82,13 @@ export function RecordsPage() {
   useEffect(() => setSelectedId(null), [month, kind]);
 
   function openEntry(id: string | null) {
+    setPrefill(null);
     setSelectedId(id);
     if (!wide) setSheetOpen(true);
   }
 
   function onDone(saved: Transaction | null) {
+    setPrefill(null);
     setSheetOpen(false);
     setSelectedId(null);
     if (saved) {
@@ -83,7 +102,7 @@ export function RecordsPage() {
   const data = household.data;
   const canEdit = (t: Transaction | null) => !t || !data || canEditTransaction({ memberId: data.me.memberId, role: data.me.role }, t);
   const form = data && (
-    <EntryForm data={data} kind={kind} transaction={selected} canEdit={canEdit(selected)} suggestions={suggestions} onDone={onDone} />
+    <EntryForm data={data} kind={kind} transaction={selected} prefill={selected ? null : prefill} canEdit={canEdit(selected)} suggestions={suggestions} onDone={onDone} />
   );
   const formTitle = selected ? (canEdit(selected) ? "기록 수정" : "기록 보기") : "새 기록";
 

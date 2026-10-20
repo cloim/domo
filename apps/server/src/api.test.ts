@@ -94,6 +94,10 @@ describe("가계부 API", () => {
       (await member("POST", "/api/transactions", { kind: "expense", paymentMethodId: cash.id, counterparty: "시장", memo: null, amount: 5000, installmentMonths: 2, categoryId: grocery.id, occurredAt: "2026-10-01T09:00" })).statusCode,
     ).toBe(400);
 
+    // 같은 거래처의 최근 기록으로 분류와 지출수단을 추천한다.
+    expect((await member("GET", `/api/transactions/suggest?counterparty=${encodeURIComponent("이마트")}&kind=expense`)).json()).toEqual({ categoryId: grocery.id, paymentMethodId: card.id });
+    expect((await member("GET", `/api/transactions/suggest?counterparty=${encodeURIComponent("없는곳")}&kind=expense`)).json()).toEqual({ categoryId: null, paymentMethodId: null });
+
     // 구성원은 대표자의 기록을 고칠 수 없다.
     expect((await member("DELETE", `/api/transactions/${txId}`)).statusCode).toBe(403);
     expect((await owner("DELETE", `/api/transactions/${txId}`)).statusCode).toBe(200);

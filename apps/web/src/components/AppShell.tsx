@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { signOut } from "../lib/auth.ts";
 import { useHousehold, type Me } from "../lib/queries.ts";
+import { NotifyStatus } from "./NotifyStatus.tsx";
 import logoUrl from "../assets/logo.svg";
 
 const NAV = [
@@ -72,6 +73,7 @@ export function TopBar({ title, parent, actions, me }: TopBarProps) {
       </div>
       <div className="topbar-actions">
         {actions}
+        <NotifyStatus />
         <AvatarMenu me={me} />
       </div>
     </header>

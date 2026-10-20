@@ -617,3 +617,21 @@ button.rank-row:hover { background: var(--hover); }
 .timeline-go { margin-left: auto; color: var(--ink-3); }
 .timeline-change { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; background: var(--bg); color: var(--ink-2); font-size: 14px; }
 .timeline > li.hint { padding: 14px; }
+
+/* 알림 연동 */
+.app-icon { flex: none; width: 34px; height: 34px; border-radius: 9px; }
+.notify-alert { display: flex; gap: 10px; padding: 12px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--ink); }
+.notify-alert svg { flex: none; margin-top: 2px; color: var(--accent); }
+.notify-alert p { margin: 4px 0 10px; color: var(--ink-2); font-size: 13px; }
+.notify-list { margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); list-style: none; }
+.notify-list > li { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; }
+.notify-list > li + li { border-top: 1px solid var(--line); }
+.notify-body { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; font-size: 14px; }
+.notify-body > span:first-of-type { color: var(--ink-2); white-space: pre-line; word-break: break-all; }
+.app-pick-list { max-height: 50vh; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.app-pick-list label.md-item { cursor: pointer; }
+.app-pick-list input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+.readonly-note.is-bad { background: var(--danger-soft); color: var(--danger); }
+.notify-status { position: relative; }
+.notify-status .status-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border: 2px solid var(--bg); border-radius: 50%; box-sizing: content-box; }

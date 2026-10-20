@@ -14,10 +14,13 @@ import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
 import { formatWon } from "../../lib/format.ts";
 import { useNumericInputMode } from "../../lib/useMedia.ts";
+import { api } from "../../lib/api.ts";
 import { useDeleteTransaction, useSaveTransaction, type HouseholdData } from "../../lib/queries.ts";
 
 const LAST_METHOD_KEY = "domo.lastPaymentMethod";
 const KIND_LABEL = { expense: "지출", income: "수입" } as const;
+
+export type EntryPrefill = Pick<Transaction, "kind" | "amount" | "counterparty" | "memo" | "occurredAt" | "paymentMethodId"> & { categoryId: string | null };
 
 export interface Suggestion {
   counterparty: string;
@@ -29,6 +32,8 @@ interface Props {
   data: HouseholdData;
   kind: TransactionKind;
   transaction: Transaction | null;
+  /** 알림 등록처럼 밖에서 채워 넘기는 새 기록 값 */
+  prefill?: EntryPrefill | null;
   canEdit: boolean;
   suggestions: Suggestion[];
   onDone: (saved: Transaction | null) => void;
@@ -42,7 +47,7 @@ function readLastMethod() {
   }
 }
 
-export function EntryForm({ data, kind: initialKind, transaction, canEdit, suggestions, onDone }: Props) {
+export function EntryForm({ data, kind: initialKind, transaction, prefill = null, canEdit, suggestions, onDone }: Props) {
   const dialog = useDialog();
   const save = useSaveTransaction();
   const remove = useDeleteTransaction();
@@ -53,31 +58,70 @@ export function EntryForm({ data, kind: initialKind, transaction, canEdit, sugge
   const defaultMethod = () => activeMethods.find((m) => m.id === readLastMethod())?.id ?? activeMethods[0]?.id ?? null;
   const parentOf = (categoryId: string | null) => data.categories.find((c) => c.id === categoryId)?.parentId ?? null;
 
-  const [kind, setKind] = useState<TransactionKind>(transaction?.kind ?? initialKind);
-  const [amount, setAmount] = useState(transaction ? String(transaction.amount) : "");
-  const [paymentMethodId, setPaymentMethodId] = useState<string | null>(transaction ? transaction.paymentMethodId : defaultMethod());
-  const [installmentMonths, setInstallmentMonths] = useState(transaction?.installmentMonths ?? 1);
-  const [counterparty, setCounterparty] = useState(transaction?.counterparty ?? "");
-  const [memo, setMemo] = useState(transaction?.memo ?? "");
-  const [parentId, setParentId] = useState<string | null>(parentOf(transaction?.categoryId ?? null));
-  const [categoryId, setCategoryId] = useState<string | null>(transaction?.categoryId ?? null);
-  const [occurredAt, setOccurredAt] = useState(transaction?.occurredAt ?? nowLocalDateTime());
+  /** 수정할 기록, 알림에서 넘어온 값, 새 기록 기본값 순으로 폼을 채운다. */
+  const initial = () => {
+    const src = transaction ?? prefill;
+    const k = src?.kind ?? initialKind;
+    return {
+      kind: k,
+      amount: src ? String(src.amount) : "",
+      paymentMethodId: transaction ? transaction.paymentMethodId : k === "income" ? null : (prefill?.paymentMethodId ?? defaultMethod()),
+      installmentMonths: transaction?.installmentMonths ?? 1,
+      counterparty: src?.counterparty ?? "",
+      memo: src?.memo ?? "",
+      categoryId: src?.categoryId ?? null,
+      occurredAt: src?.occurredAt ?? nowLocalDateTime(),
+    };
+  };
+  const first = initial();
+  const [kind, setKind] = useState<TransactionKind>(first.kind);
+  const [amount, setAmount] = useState(first.amount);
+  const [paymentMethodId, setPaymentMethodId] = useState<string | null>(first.paymentMethodId);
+  const [installmentMonths, setInstallmentMonths] = useState(first.installmentMonths);
+  const [counterparty, setCounterparty] = useState(first.counterparty);
+  const [memo, setMemo] = useState(first.memo);
+  const [parentId, setParentId] = useState<string | null>(parentOf(first.categoryId));
+  const [categoryId, setCategoryId] = useState<string | null>(first.categoryId);
+  const [occurredAt, setOccurredAt] = useState(first.occurredAt);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // 다른 기록을 고르거나 새 기록으로 바뀌면 폼을 그 기록으로 다시 채운다.
+  // 다른 기록을 고르거나 새 기록, 알림 값으로 바뀌면 폼을 다시 채운다.
   useEffect(() => {
-    setKind(transaction?.kind ?? initialKind);
-    setAmount(transaction ? String(transaction.amount) : "");
-    setPaymentMethodId(transaction ? transaction.paymentMethodId : defaultMethod());
-    setInstallmentMonths(transaction?.installmentMonths ?? 1);
-    setCounterparty(transaction?.counterparty ?? "");
-    setMemo(transaction?.memo ?? "");
-    setParentId(parentOf(transaction?.categoryId ?? null));
-    setCategoryId(transaction?.categoryId ?? null);
-    setOccurredAt(transaction?.occurredAt ?? nowLocalDateTime());
+    const v = initial();
+    setKind(v.kind);
+    setAmount(v.amount);
+    setPaymentMethodId(v.paymentMethodId);
+    setInstallmentMonths(v.installmentMonths);
+    setCounterparty(v.counterparty);
+    setMemo(v.memo);
+    setParentId(parentOf(v.categoryId));
+    setCategoryId(v.categoryId);
+    setOccurredAt(v.occurredAt);
     setErrors({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transaction?.id, initialKind]);
+  }, [transaction?.id, initialKind, prefill]);
+
+  // 알림에서 온 값에 분류가 없으면 같은 거래처의 최근 기록으로 채운다.
+  useEffect(() => {
+    if (!prefill?.counterparty || prefill.categoryId || transaction) return;
+    let cancelled = false;
+    api<{ categoryId: string | null; paymentMethodId: string | null }>(
+      `/api/transactions/suggest?counterparty=${encodeURIComponent(prefill.counterparty)}&kind=${prefill.kind}`,
+    )
+      .then((s) => {
+        if (cancelled) return;
+        if (s.categoryId) {
+          setParentId(parentOf(s.categoryId));
+          setCategoryId(s.categoryId);
+        }
+        if (s.paymentMethodId && !prefill.paymentMethodId) setPaymentMethodId(s.paymentMethodId);
+      })
+      .catch(() => {}); // 추천은 없어도 직접 고르면 된다.
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   const visible = (c: { archived: boolean; id: string }) => !c.archived || c.id === categoryId || c.id === parentId;
   const parents = data.categories.filter((c) => c.kind === kind && !c.parentId && visible(c));
