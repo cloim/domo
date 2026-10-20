@@ -2,6 +2,7 @@ node_modules/
 dist/
 .worktrees/
 .env
+.env.development
 *.log
 apps/web/android/app/build/
 apps/web/android/.gradle/

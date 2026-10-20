@@ -12,13 +12,20 @@
 
 ## 개발
 
+운영과 개발은 포트, DB, 설정 파일을 따로 쓴다.
+
+| 구분 | 화면 | API | DB | 설정 |
+| --- | --- | --- | --- | --- |
+| 운영 | 4300 (서버가 웹 빌드도 제공) | 4300 | `domo` | `.env` |
+| 개발 | 5173 (Vite) | 4310 | `domo_dev` | `.env.development` |
+
 ```bash
 pnpm install
-cp .env.example .env        # 값 채우기
-pnpm db:up                  # PostgreSQL (localhost:5434)
-pnpm dev:server             # http://localhost:4300
-pnpm dev:web                # http://localhost:5173
-pnpm test
+cp .env.example .env.development   # 개발 값 채우기(PORT=4310, domo_dev, DEV_LOGIN=true)
+pnpm db:up                         # PostgreSQL (localhost:5434)
+pnpm dev:server                    # 개발 API http://localhost:4310
+pnpm dev:web                       # 개발 화면 http://localhost:5173 (/api 는 4310으로)
+pnpm test                          # 테스트는 domo_test DB
 ```
 
 ## 안드로이드 릴리스
