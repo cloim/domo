@@ -6,10 +6,19 @@ import {
   paymentMethodLabel,
   reorderSchema,
   transactionInputSchema,
+  billingCycle,
+  cardBillForMonth,
+  expandEntries,
+  isCardPayment,
+  isCreditCard,
+  nowLocalDateTime,
+  monthRange,
+  type CardSettlement,
+  type YearMonth,
   type PaymentMethodInput,
   type TransactionInput,
 } from "@domo/core";
-import { and, count, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/client.ts";
@@ -17,6 +26,7 @@ import { categories, householdMembers, paymentMethods, recurringExpenses, transa
 import { HttpError, parse, requireMember, type MemberRow } from "../http.ts";
 
 const rangeSchema = z.object({ start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
+const settlementMonth = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/).transform((s) => s as YearMonth);
 
 const toDto = (t: typeof transactions.$inferSelect) => ({
   id: t.id,
@@ -31,9 +41,81 @@ const toDto = (t: typeof transactions.$inferSelect) => ({
   // DB 문자열 "2026-10-20 09:30:00" 을 화면 형식으로 맞춘다.
   occurredAt: t.occurredAt.slice(0, 16).replace(" ", "T"),
   recurringId: t.recurringId,
+  settlementMethodId: t.settlementMethodId,
 });
 
 export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
+  async function settlementCandidates(executor: Pick<Db, "select">, householdId: string, month: YearMonth) {
+    const methods = await executor.select().from(paymentMethods).where(eq(paymentMethods.householdId, householdId));
+    const cats = await executor.select().from(categories).where(eq(categories.householdId, householdId));
+    const cards = methods.filter(isCreditCard);
+    const cycles = cards.map((m) => billingCycle(m, month)).filter((c) => c !== null);
+    if (!cycles.length) return [];
+    const start = cycles.map((c) => c.usage.start).sort()[0]!;
+    const end = cycles.map((c) => c.usage.end).sort().at(-1)!;
+    const rows = await executor.select().from(transactions).where(and(
+      eq(transactions.householdId, householdId),
+      lte(transactions.occurredAt, `${end} 23:59:59`),
+      gte(sql`${transactions.occurredAt} + make_interval(months => ${transactions.installmentMonths} - 1)`, sql`${start}::timestamp`),
+    ));
+    const entries = expandEntries(rows.map(toDto), { start, end });
+    const period = monthRange(month);
+    const paid = await executor.select().from(transactions).where(and(eq(transactions.householdId, householdId),
+      or(eq(transactions.settlementMonth, month), and(gte(transactions.occurredAt, `${period.start} 00:00:00`), lte(transactions.occurredAt, `${period.end} 23:59:59`)))));
+    const today = nowLocalDateTime().slice(0, 10);
+    const result: CardSettlement[] = [];
+    for (const card of cards) {
+      const bill = cardBillForMonth(entries, { ...card, archived: !!card.archivedAt }, month, today);
+      if (!bill || bill.amount <= 0) continue;
+      // 이관되었거나 수동으로 입력한 같은 카드의 대금도 다시 만들지 않는다.
+      const recorded = paid.some((t) => (t.settlementMethodId === card.id && t.settlementMonth === month) ||
+        (t.kind === "expense" && isCardPayment(t.categoryId, cats.map((c) => ({ ...c, archived: !!c.archivedAt }))) &&
+          t.amount === bill.amount && t.occurredAt.slice(0, 10) === bill.paymentDate &&
+          (t.counterparty === card.name || t.counterparty === card.issuer)));
+      result.push({ ...bill, paymentMethodId: card.id, name: card.name, recorded });
+    }
+    return result;
+  }
+
+  app.get("/api/settlements/cards", async (req) => {
+    const me = await requireMember(db, req);
+    const { month } = parse(z.object({ month: settlementMonth }), req.query);
+    return settlementCandidates(db, me.householdId, month);
+  });
+
+  app.post("/api/settlements/cards", async (req) => {
+    const me = await requireMember(db, req);
+    const { month, paymentMethodIds } = parse(z.object({ month: settlementMonth, paymentMethodIds: z.array(z.string().uuid()).min(1).max(100) }), req.body);
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${me.householdId}))`);
+      const candidates = await settlementCandidates(tx, me.householdId, month);
+      const selected = [...new Set(paymentMethodIds)].map((id) => candidates.find((c) => c.paymentMethodId === id));
+      if (selected.some((c) => !c)) throw new HttpError(400, "정산 대상을 다시 확인해 주세요.");
+      const targets = selected.filter((c): c is CardSettlement => !!c && !c.recorded);
+      if (targets.some((c) => c.inProgress)) throw new HttpError(400, "사용 기간이 끝난 뒤 정산해 주세요.");
+      if (!targets.length) return { created: 0 };
+      const methods = await tx.select().from(paymentMethods).where(eq(paymentMethods.householdId, me.householdId));
+      const cash = methods.find((m) => m.type === "cash" && !m.archivedAt);
+      if (!cash) throw new HttpError(400, "사용 중인 현금 지출수단을 추가해 주세요.");
+      const cats = await tx.select().from(categories).where(eq(categories.householdId, me.householdId));
+      let category = cats.find((c) => isCardPayment(c.id, cats.map((cat) => ({ ...cat, archived: !!cat.archivedAt }))));
+      if (!category) {
+        let parent = cats.find((c) => c.kind === "expense" && !c.parentId && (c.name === "금융/세금" || c.name === "금융"));
+        if (!parent) [parent] = await tx.insert(categories).values({ householdId: me.householdId, kind: "expense", name: "금융/세금" }).returning();
+        [category] = await tx.insert(categories).values({ householdId: me.householdId, kind: "expense", parentId: parent!.id, name: "카드대금" }).returning();
+      }
+      for (const target of targets) {
+        const card = methods.find((m) => m.id === target.paymentMethodId)!;
+        await tx.insert(transactions).values({ householdId: me.householdId, memberId: me.id, kind: "expense",
+          paymentMethodId: cash.id, categoryId: category!.id, counterparty: card.name,
+          memo: `${target.usage.start} ~ ${target.usage.end} 사용대금`, amount: target.amount,
+          occurredAt: `${target.paymentDate}T00:00`, settlementMethodId: card.id, settlementMonth: month,
+        });
+      }
+      return { created: targets.length };
+    });
+  });
+
   /** 입력값의 분류와 지출수단이 이 가계 소속이며 종류가 맞는지 확인한다. */
   async function assertRefs(me: MemberRow, input: TransactionInput) {
     const [category] = await db.select().from(categories).where(and(eq(categories.id, input.categoryId), eq(categories.householdId, me.householdId)));
@@ -163,7 +245,7 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
     const [target] = await db.select().from(paymentMethods).where(where);
     if (!target) throw new HttpError(404, "지출수단을 찾을 수 없습니다.");
     if (!target.archivedAt && (await activeMethodCount(me.householdId)) <= 1) throw new HttpError(400, "사용 중인 지출수단이 최소 하나는 있어야 합니다.");
-    const [used] = await db.select({ n: count() }).from(transactions).where(eq(transactions.paymentMethodId, req.params.id));
+    const [used] = await db.select({ n: count() }).from(transactions).where(or(eq(transactions.paymentMethodId, req.params.id), eq(transactions.settlementMethodId, req.params.id)));
     const [fixed] = await db.select({ n: count() }).from(recurringExpenses).where(eq(recurringExpenses.paymentMethodId, req.params.id));
     if (used!.n + fixed!.n > 0) {
       await db.update(paymentMethods).set({ archivedAt: new Date() }).where(where);

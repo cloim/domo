@@ -645,3 +645,12 @@ button.rank-row:hover { background: var(--hover); }
 .test-result.is-bad > svg { color: var(--danger); }
 .test-result p { margin: 4px 0 0; color: var(--ink-2); font-size: 14px; word-break: break-all; }
 .test-pattern { display: block; margin-top: 6px; padding: 8px 10px; border-radius: 6px; background: var(--surface); word-break: break-all; }
+/* 사용 기준 합계와 출금 기준 요약 */
+.cash-summary { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 12px 0; color: var(--ink-2); }
+.cash-summary strong { margin-left: 8px; color: var(--ink); }
+.cash-summary small { flex-basis: 100%; font-size: 12px; }
+.settlement-list { list-style: none; padding: 0; margin: 16px 0; }
+.settlement-list li { border-bottom: 1px solid var(--line); }
+.settlement-list label { display: flex; align-items: center; gap: 12px; padding: 14px 0; cursor: pointer; }
+.settlement-list label > span { flex: 1; min-width: 0; }
+.settlement-list small { display: block; color: var(--ink-2); margin-top: 4px; font-size: 12px; }

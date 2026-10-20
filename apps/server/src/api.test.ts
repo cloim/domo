@@ -296,6 +296,44 @@ describe("알림 연동 기기 동기화", () => {
   });
 });
 
+describe("카드 정산", () => {
+  it("서버 재계산, 할부, 가계 격리, 동시 중복과 수동 납부를 처리한다", async () => {
+    const owner = await login("settle@test.com", "정산");
+    await owner("POST", "/api/households", { name: "정산 가계" });
+    const h = (await owner("GET", "/api/household")).json();
+    const category = h.categories.find((c: { parentId: string | null }) => c.parentId);
+    const cardId = (await owner("POST", "/api/payment-methods", cardInput())).json().id;
+    const checkId = (await owner("POST", "/api/payment-methods", cardInput({ cardKind: "check", last4: "5678" }))).json().id;
+    const input = { kind: "expense", paymentMethodId: cardId, counterparty: "마트", memo: null, amount: 9000, installmentMonths: 3, categoryId: category.id, occurredAt: "2026-08-20T10:00" };
+    expect((await owner("POST", "/api/transactions", input)).statusCode).toBe(200);
+    await owner("POST", "/api/transactions", { ...input, amount: 2000, installmentMonths: 1, occurredAt: "2026-09-30T23:59" });
+    await owner("POST", "/api/transactions", { ...input, paymentMethodId: checkId, installmentMonths: 1, amount: 1000 });
+    const preview = await owner("GET", "/api/settlements/cards?month=2026-10");
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toHaveLength(1);
+    expect(preview.json()[0]).toMatchObject({ amount: 5000, paymentDate: "2026-10-14", recorded: false });
+    const other = await login("settle-other@test.com", "다른 가계");
+    await other("POST", "/api/households", { name: "다른 가계" });
+    expect((await other("POST", "/api/settlements/cards", { month: "2026-10", paymentMethodIds: [cardId] })).statusCode).toBe(400);
+    const requests = await Promise.all([1, 2].map(() => owner("POST", "/api/settlements/cards", { month: "2026-10", paymentMethodIds: [cardId], amount: 1 })));
+    expect(requests.map((r) => r.statusCode)).toEqual([200, 200]);
+    expect(requests.map((r) => r.json().created).sort()).toEqual([0, 1]);
+    const rows = (await owner("GET", "/api/transactions?start=2026-10-01&end=2026-10-31")).json();
+    const bill = rows.find((t: { counterparty: string }) => t.counterparty === "신한카드 1234");
+    expect(bill).toMatchObject({ amount: 5000, paymentMethodId: h.paymentMethods[0].id, occurredAt: "2026-10-14T00:00", settlementMethodId: cardId });
+    expect((await owner("GET", "/api/settlements/cards?month=2026-10")).json()[0].recorded).toBe(true);
+    expect((await owner("GET", "/api/settlements/cards?month=2027-02")).statusCode).toBe(200);
+    const future = { ...input, installmentMonths: 1, occurredAt: "2099-09-01T10:00" };
+    await owner("POST", "/api/transactions", future);
+    expect((await owner("POST", "/api/settlements/cards", { month: "2099-10", paymentMethodIds: [cardId] })).statusCode).toBe(400);
+    // 기존 수동 카드대금도 같은 금액과 결제일이면 정산 후보에서 기록됨으로 표시한다.
+    await owner("DELETE", `/api/transactions/${bill.id}`);
+    await owner("POST", "/api/transactions", { ...input, installmentMonths: 1, paymentMethodId: bill.paymentMethodId, categoryId: bill.categoryId, counterparty: bill.counterparty, amount: 5000, occurredAt: bill.occurredAt });
+    expect((await owner("GET", "/api/settlements/cards?month=2026-10")).json()[0].recorded).toBe(true);
+    expect((await owner("POST", "/api/settlements/cards", { month: "2026-10", paymentMethodIds: [cardId] })).json()).toEqual({ created: 0 });
+  });
+});
+
 describe("개발용 로그인", () => {
   it("터널을 거친 요청은 막는다", async () => {
     const res = await app.inject({ method: "POST", url: "/api/auth/dev", payload: { email: "x@test.com", name: "x" }, headers: { host: "domo.example.com", "cf-connecting-ip": "1.2.3.4" } });

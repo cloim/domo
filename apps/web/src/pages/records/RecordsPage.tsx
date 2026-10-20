@@ -4,13 +4,14 @@ import {
   expandEntries,
   groupByDay,
   monthRange,
-  totalsByKind,
+  summarizeEntries,
+  isCheckCardPayment,
   type LedgerEntry,
   type Transaction,
   type TransactionKind,
   type YearMonth,
 } from "@domo/core";
-import { NotebookPen, Plus } from "lucide-react";
+import { CreditCard, NotebookPen, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useOutletContext, useSearchParams } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
@@ -20,6 +21,7 @@ import { formatTime, formatWon, isWeekend, weekdayOf } from "../../lib/format.ts
 import { useHousehold, useTransactions, type HouseholdData, type Me } from "../../lib/queries.ts";
 import { useMedia, WIDE_EDITOR } from "../../lib/useMedia.ts";
 import { EntryForm, type EntryPrefill, type Suggestion } from "./EntryForm.tsx";
+import { CardSettlementDialog } from "./CardSettlementDialog.tsx";
 
 const KINDS: { kind: TransactionKind; label: string }[] = [
   { kind: "expense", label: "지출" },
@@ -39,6 +41,7 @@ export function RecordsPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [settlementOpen, setSettlementOpen] = useState(false);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<EntryPrefill | null>(null);
   const location = useLocation();
@@ -59,7 +62,7 @@ export function RecordsPage() {
   }, [location.state]);
 
   const entries = useMemo(() => expandEntries(txs.data ?? [], range), [txs.data, range]);
-  const totals = useMemo(() => totalsByKind(entries), [entries]);
+  const totals = useMemo(() => summarizeEntries(entries, household.data ?? { categories: [], paymentMethods: [] }), [entries, household.data]);
   const groups = useMemo(() => groupByDay(entries.filter((e) => e.transaction.kind === kind)), [entries, kind]);
   const suggestions = useMemo<Suggestion[]>(() => {
     const seen = new Map<string, Suggestion>();
@@ -108,7 +111,7 @@ export function RecordsPage() {
 
   return (
     <>
-      <TopBar title="입출기록" me={me} />
+      <TopBar title="입출기록" me={me} actions={<button type="button" className="icon-btn" title="카드 정산" aria-label="카드 정산" onClick={() => setSettlementOpen(true)}><CreditCard size={20} aria-hidden="true" /></button>} />
       <div className="content">
         <div className="records">
           <section className="ledger" aria-label="입출 내역">
@@ -136,6 +139,13 @@ export function RecordsPage() {
                       )}
                     </button>
                   ))}
+                </div>
+                <div className="cash-summary" aria-label="출금 기준 월 요약">
+                  {txs.isPending || !data ? <span className="skeleton" style={{ height: 28, width: "100%" }} /> : <>
+                    <span>실지출 <strong className="num">{formatWon(totals.realExpense)}원</strong></span>
+                    <span>월 잔액 <strong className="num">{formatWon(totals.balance)}원</strong></span>
+                    <small>지출은 사용 기준, 실지출은 출금일 기준이에요. 월 잔액 = 수입 − 실지출</small>
+                  </>}
                 </div>
               </div>
 
@@ -172,7 +182,10 @@ export function RecordsPage() {
                       ))}
                       {g.entries.length > 1 && (
                         <div className="day-total num">
-                          {formatWon(g.total)}원
+                          {kind === "income" ? `${formatWon(g.total)}원` : <>
+                            사용 {formatWon(summarizeEntries(g.entries, data).expense)}원
+                            {" | "}출금 {formatWon(summarizeEntries(g.entries, data).realExpense)}원
+                          </>}
                         </div>
                       )}
                     </div>
@@ -202,6 +215,7 @@ export function RecordsPage() {
       <Sheet open={!wide && sheetOpen} title={formTitle} onClose={() => setSheetOpen(false)}>
         {form}
       </Sheet>
+      {settlementOpen && <CardSettlementDialog key={month} month={month} onClose={() => setSettlementOpen(false)} />}
     </>
   );
 }
@@ -218,6 +232,7 @@ function EntryRow({ entry, data, current, flash, onOpen }: { entry: LedgerEntry;
         <span className="entry-title">
           {t.counterparty}
           {t.recurringId && <span className="badge" style={{ marginLeft: 6, verticalAlign: 2 }}>고정</span>}
+          {isCheckCardPayment(t, data) && <span className="badge" title="체크카드는 사용 시 출금되어 카드대금을 지출 합계에서 제외합니다." style={{ marginLeft: 6, verticalAlign: 2 }}>중복 정산 제외</span>}
         </span>
         <span className="entry-meta">
           {t.memo ? <span className="entry-memo">{t.memo}</span> : <span>{category?.name ?? "미분류"}</span>}

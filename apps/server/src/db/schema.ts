@@ -170,8 +170,10 @@ export const transactions = pgTable(
     /** 가족이 사는 지역의 벽시계 시각 */
     occurredAt: timestamp("occurred_at", { mode: "string" }).notNull(),
     recurringId: uuid("recurring_id").references((): AnyPgColumn => recurringExpenses.id, { onDelete: "set null" }),
+    settlementMethodId: uuid("settlement_method_id").references(() => paymentMethods.id),
+    settlementMonth: text("settlement_month"),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => sql`now()`),
   },
-  (t) => [index("transactions_household_occurred_idx").on(t.householdId, t.occurredAt)],
+  (t) => [index("transactions_household_occurred_idx").on(t.householdId, t.occurredAt), uniqueIndex("transactions_settlement_uq").on(t.settlementMethodId, t.settlementMonth)],
 );

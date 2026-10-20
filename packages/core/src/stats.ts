@@ -1,6 +1,7 @@
 import { type DateRange, eachDay } from "./dates.ts";
 import type { Category, LedgerEntry, Member, PaymentMethod } from "./ledger.ts";
 import type { TransactionKind } from "./schemas.ts";
+import { countsAsExpense, type ExpenseBasis } from "./summary.ts";
 
 export interface StatSlice {
   id: string;
@@ -41,8 +42,8 @@ function add(map: Map<string, number>, key: string, amount: number) {
   map.set(key, (map.get(key) ?? 0) + amount);
 }
 
-export function computeStats(entries: LedgerEntry[], kind: TransactionKind, range: DateRange, lookups: Lookups): PeriodStats {
-  const scoped = entries.filter((e) => e.transaction.kind === kind);
+export function computeStats(entries: LedgerEntry[], kind: TransactionKind, range: DateRange, lookups: Lookups, basis: ExpenseBasis = "usage"): PeriodStats {
+  const scoped = entries.filter((e) => kind === "income" ? e.transaction.kind === "income" : countsAsExpense(e.transaction, lookups, basis));
   const total = scoped.reduce((s, e) => s + e.amount, 0);
   const categoryById = new Map(lookups.categories.map((c) => [c.id, c]));
 

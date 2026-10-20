@@ -11,6 +11,7 @@ import {
   type StatSlice,
   type TransactionKind,
   type YearMonth,
+  type ExpenseBasis,
 } from "@domo/core";
 import type { ChartOptions, TooltipItem } from "chart.js";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -32,6 +33,7 @@ const DAILY_LIMIT_DAYS = 62;
 export function StatsPage() {
   const me = useOutletContext<Me>();
   const [kind, setKind] = useState<TransactionKind>("expense");
+  const [basis, setBasis] = useState<ExpenseBasis>("usage");
   const [mode, setMode] = useState<Mode>("month");
   const [month, setMonth] = useState<YearMonth>(currentYearMonth());
   const [custom, setCustom] = useState<DateRange>(() => ({ start: monthRange(shiftMonth(currentYearMonth(), -2)).start, end: monthRange(currentYearMonth()).end }));
@@ -41,8 +43,8 @@ export function StatsPage() {
   const txs = useTransactions(range);
   const stats = useMemo(() => {
     if (!txs.data || !household.data) return null;
-    return computeStats(expandEntries(txs.data, range), kind, range, household.data);
-  }, [txs.data, household.data, kind, range]);
+    return computeStats(expandEntries(txs.data, range), kind, range, household.data, basis);
+  }, [txs.data, household.data, kind, range, basis]);
 
   // 진행 중인 기간은 오늘까지 지난 날만 평균에 넣는다.
   const today = nowLocalDateTime().slice(0, 10);
@@ -70,6 +72,10 @@ export function StatsPage() {
                 기간
               </button>
             </div>
+            {kind === "expense" && <div className="segmented" role="group" aria-label="지출 집계 기준">
+              <button type="button" aria-pressed={basis === "usage"} onClick={() => setBasis("usage")}>사용 기준</button>
+              <button type="button" aria-pressed={basis === "cash"} onClick={() => setBasis("cash")}>출금 기준</button>
+            </div>}
             {mode === "month" ? (
               <MonthSwitch value={month} onChange={setMonth} />
             ) : (

@@ -14,6 +14,8 @@ export interface Transaction {
   occurredAt: string;
   /** 고정지출에서 자동 생성된 기록이면 그 고정지출 id */
   recurringId?: string | null;
+  /** 카드대금이 정산하는 원래 카드. 과거 수동 기록은 메모로 식별한다. */
+  settlementMethodId?: string | null;
 }
 
 export interface Member {
