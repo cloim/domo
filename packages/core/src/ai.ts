@@ -21,7 +21,7 @@ export function aiFormatOf(provider: string): AiFormat {
   return AI_PROVIDERS.find((p) => p.id === provider)?.format ?? "openai";
 }
 
-/** https 만 받는다. 로컬 모델(예: Ollama)을 위해 localhost 의 http 는 허용한다. */
+/** 형식만 본다. https 와 공인 주소 여부는 서버가 요청 직전에 실제 IP로 확인한다(apps/server/src/netguard.ts). */
 const endpoint = z
   .string()
   .trim()
@@ -30,7 +30,7 @@ const endpoint = z
   .refine((v) => {
     try {
       const u = new URL(v.replace("{model}", "m"));
-      return u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname));
+      return u.protocol === "https:" || u.protocol === "http:";
     } catch {
       return false;
     }

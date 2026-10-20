@@ -16,6 +16,7 @@ import type { Config } from "../config.ts";
 import type { Db } from "../db/client.ts";
 import { userAiSettings } from "../db/schema.ts";
 import { HttpError, parse, userIdOf } from "../http.ts";
+import { assertPublicHttps } from "../netguard.ts";
 import { decryptSecret, encryptSecret } from "../secret.ts";
 
 const trimSlash = (url: string) => url.replace(/\/+$/, "");
@@ -28,10 +29,13 @@ function errorMessage(data: unknown): string {
   return String(message ?? (typeof data === "string" ? data : JSON.stringify(data))).slice(0, 300);
 }
 
-async function send(url: string, headers: Record<string, string>, body?: unknown): Promise<unknown> {
+async function send(url: string, headers: Record<string, string>, body: unknown, allowPrivate: boolean): Promise<unknown> {
+  if (!allowPrivate) await assertPublicHttps(url);
   let res: Response;
   try {
     res = await fetch(url, {
+      // 다른 주소로 넘기는 응답을 따라가면 위의 주소 검사를 우회할 수 있다.
+      redirect: "manual",
       method: body === undefined ? "GET" : "POST",
       headers: { "content-type": "application/json", ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -47,6 +51,7 @@ async function send(url: string, headers: Record<string, string>, body?: unknown
   } catch {
     // 글로 온 오류는 그대로 보여준다.
   }
+  if (res.status >= 300 && res.status < 400) throw new HttpError(502, "AI 서비스가 다른 주소로 넘기려 해서 중단했습니다. 주소를 확인해 주세요.");
   if (!res.ok) {
     const prefix = res.status === 401 || res.status === 403 ? "API 키나 권한을 확인해 주세요." : `AI 서비스 오류(${res.status}).`;
     throw new HttpError(502, `${prefix} ${errorMessage(data)}`);
@@ -55,14 +60,19 @@ async function send(url: string, headers: Record<string, string>, body?: unknown
 }
 
 /** 시스템 지시와 사용자 글 한 건을 보내고 모델의 답 글을 받는다. */
-export async function completeText(config: AiConfig, key: string, system: string, user: string): Promise<string> {
+export async function completeText(config: AiConfig, key: string, system: string, user: string, allowPrivate = false): Promise<string> {
   if (!config.model) throw new HttpError(400, "모델을 입력하거나 골라 주세요.");
   if (aiFormatOf(config.provider) === "gemini") {
-    const data = await send(config.baseUrl.replace("{model}", encodeURIComponent(config.model)), { "x-goog-api-key": key }, {
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: "user", parts: [{ text: user }] }],
-      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192 },
-    });
+    const data = await send(
+      config.baseUrl.replace("{model}", encodeURIComponent(config.model)),
+      { "x-goog-api-key": key },
+      {
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: user }] }],
+        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192 },
+      },
+      allowPrivate,
+    );
     // streamGenerateContent 는 조각 배열, generateContent 는 객체 하나다. 생각 조각(thought)은 뺀다.
     const chunks = (Array.isArray(data) ? data : [data]) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] }[];
     return chunks
@@ -71,14 +81,19 @@ export async function completeText(config: AiConfig, key: string, system: string
       .map((p) => p.text ?? "")
       .join("");
   }
-  const data = (await send(`${trimSlash(config.baseUrl)}/chat/completions`, { authorization: `Bearer ${key}` }, {
-    model: config.model,
-    max_tokens: 2000,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-  })) as { choices?: { message?: { content?: unknown } }[] };
+  const data = (await send(
+    `${trimSlash(config.baseUrl)}/chat/completions`,
+    { authorization: `Bearer ${key}` },
+    {
+      model: config.model,
+      max_tokens: 2000,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    },
+    allowPrivate,
+  )) as { choices?: { message?: { content?: unknown } }[] };
   const content = data?.choices?.[0]?.message?.content;
   return Array.isArray(content) ? content.map((c: { text?: string }) => c.text ?? "").join("") : String(content ?? "");
 }
@@ -119,6 +134,7 @@ export async function aiRoutes(app: FastifyInstance, { db, config }: { db: Db; c
   app.put("/api/ai/settings", async (req) => {
     const userId = userIdOf(req);
     const input = parse(aiSettingsInputSchema, req.body);
+    if (!config.aiAllowPrivateHosts) await assertPublicHttps(input.baseUrl.replace("{model}", "model"));
     const keyEnc = input.key === undefined ? undefined : input.key === null ? null : encryptSecret(config, input.key);
     const values = { provider: input.provider, baseUrl: input.baseUrl, model: input.model, updatedAt: new Date(), ...(keyEnc === undefined ? {} : { keyEnc }) };
     await db
@@ -132,7 +148,7 @@ export async function aiRoutes(app: FastifyInstance, { db, config }: { db: Db; c
     const body = parse(aiRequestSchema, req.body);
     const { cfg, key } = await resolve(userIdOf(req), body);
     if (aiFormatOf(cfg.provider) !== "openai") return [];
-    const data = (await send(`${trimSlash(cfg.baseUrl)}/models`, { authorization: `Bearer ${key}` })) as { data?: { id?: string }[]; models?: { name?: string }[] };
+    const data = (await send(`${trimSlash(cfg.baseUrl)}/models`, { authorization: `Bearer ${key}` }, undefined, config.aiAllowPrivateHosts)) as { data?: { id?: string }[]; models?: { name?: string }[] };
     const ids = [...(data?.data ?? []).map((m) => m.id), ...(data?.models ?? []).map((m) => m.name)].map((id) => (id ?? "").replace(/^models\//, "")).filter(Boolean);
     return [...new Set(ids)].sort();
   });
@@ -143,7 +159,13 @@ export async function aiRoutes(app: FastifyInstance, { db, config }: { db: Db; c
     const { cfg, key } = await resolve(userIdOf(req), body);
     const started = Date.now();
     const { sample } = body;
-    const text = await completeText(aiConfigSchema.parse(cfg), key, NOTIFY_ANALYSIS_PROMPT, `앱: ${sample.appLabel}\n제목: ${sample.title}\n본문: ${sample.text}`);
+    const text = await completeText(
+      aiConfigSchema.parse(cfg),
+      key,
+      NOTIFY_ANALYSIS_PROMPT,
+      `앱: ${sample.appLabel}\n제목: ${sample.title}\n본문: ${sample.text}`,
+      config.aiAllowPrivateHosts,
+    );
     const parsed = notifyAnalysisSchema.safeParse(extractJson(text));
     if (!parsed.success) throw new HttpError(502, "AI 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.");
     const invalid = validateNotifyPattern(parsed.data.pattern);

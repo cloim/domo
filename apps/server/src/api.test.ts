@@ -38,7 +38,7 @@ beforeAll(async () => {
   await runMigrations(db);
   app = await buildApp({
     db,
-    config: { port: 0, databaseUrl: "", jwtSecret: "test-secret", googleClientId: null, devLogin: true, publicUrl: "https://domo.test", webDist: null, aiSecretKey: null },
+    config: { port: 0, databaseUrl: "", jwtSecret: "test-secret", googleClientId: null, devLogin: true, publicUrl: "https://domo.test", webDist: null, aiSecretKey: null, host: "127.0.0.1", aiAllowPrivateHosts: true },
   });
 });
 
@@ -250,7 +250,6 @@ describe("AI 설정과 알림 분석", () => {
     await user("PUT", "/api/ai/settings", { ...openai, key: null });
     expect((await user("GET", "/api/ai/settings")).json().hasKey).toBe(false);
     expect((await user("POST", "/api/ai/models", {})).statusCode).toBe(400);
-    expect((await user("PUT", "/api/ai/settings", { ...openai, baseUrl: "http://10.0.0.1/v1" })).statusCode).toBe(400);
     await mock.close();
   });
 });
