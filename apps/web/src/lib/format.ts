@@ -30,3 +30,9 @@ export function formatShortDate(date: string): string {
   const [, m, d] = date.split("-");
   return `${Number(m)}.${Number(d)}`;
 }
+
+/** 결제일 표시. 31은 말일이다. */
+export const dayLabel = (d: number) => (d === 31 ? "말일" : `${d}일`);
+
+/** 결제일 드롭다운 항목. 숫자로 시작해야 드롭다운에서 숫자를 눌러 바로 고를 수 있다. */
+export const dayOptionLabel = (d: number) => (d === 31 ? "31일 (말일)" : `${d}일`);

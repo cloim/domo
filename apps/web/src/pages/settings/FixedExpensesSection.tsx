@@ -6,14 +6,13 @@ import { useSearchParams } from "react-router";
 import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
 import { api } from "../../lib/api.ts";
-import { formatShortDate, formatWon, formatYearMonth } from "../../lib/format.ts";
+import { dayLabel, dayOptionLabel, formatShortDate, formatWon, formatYearMonth } from "../../lib/format.ts";
 import { keys, useHousehold, type HouseholdData } from "../../lib/queries.ts";
-import { useMedia } from "../../lib/useMedia.ts";
+import { useMedia, useNumericInputMode } from "../../lib/useMedia.ts";
 
 const TWO_PANE = "(min-width: 1280px)";
 const NEW = "new";
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
-const dayLabel = (d: number) => (d === 31 ? "말일" : `${d}일`);
 
 export function FixedExpensesSection() {
   const { data } = useHousehold();
@@ -99,31 +98,27 @@ export function FixedExpensesSection() {
   );
 }
 
+/** 목록과 상세 제목. 지출내용이 있으면 지출내용, 없으면 지출처 */
+const fixedTitle = (item: Pick<RecurringExpense, "memo" | "counterparty">) => item.memo || item.counterparty;
+
 function FixedItem({ item, data, current, off, onSelect }: { item: RecurringExpense; data: HouseholdData; current: boolean; off?: boolean; onSelect: () => void }) {
   const method = data.paymentMethods.find((m) => m.id === item.paymentMethodId);
-  const member = data.members.find((m) => m.id === item.memberId);
   const next = nextRecurringDate(item);
+  const sub = [item.memo ? item.counterparty : null, `매월 ${dayLabel(item.paymentDay)}`, method?.name].filter(Boolean);
   return (
     <button type="button" className={`md-item${off ? " is-off" : ""}`} aria-current={current} onClick={onSelect}>
       <span className="md-item-icon">
         <Repeat size={17} aria-hidden="true" />
       </span>
       <span className="md-item-main">
-        <strong>{item.counterparty}</strong>
+        <strong>{fixedTitle(item)}</strong>
         <span className="md-item-sub">
-          <span>매월 {dayLabel(item.paymentDay)}</span>
-          {method && (
-            <>
-              <span className="sep" aria-hidden="true" />
-              <span>{method.name}</span>
-            </>
-          )}
-          {member && (
-            <>
-              <span className="sep" aria-hidden="true" />
-              <span>{member.displayName}</span>
-            </>
-          )}
+          {sub.map((text, i) => (
+            <span key={i} style={{ display: "contents" }}>
+              {i > 0 && <span className="sep" aria-hidden="true" />}
+              <span>{text}</span>
+            </span>
+          ))}
         </span>
       </span>
       <span className="md-item-end num">
@@ -172,6 +167,7 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
   const dialog = useDialog();
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft>(() => toDraft(item, data));
+  const numericMode = useNumericInputMode();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
@@ -222,7 +218,7 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
     setErrors({});
     try {
       const id = await save.mutateAsync(parsed.data);
-      await dialog.alert("저장했습니다", `${parsed.data.counterparty} 고정지출을 저장했어요. 결제일이 되면 지출 기록이 자동으로 생깁니다.`);
+      await dialog.alert("저장했습니다", `${fixedTitle(parsed.data)} 고정지출을 저장했어요. 결제일이 되면 지출 기록이 자동으로 생깁니다.`);
       if (!item) onSaved(id);
     } catch (err) {
       await dialog.alert("저장하지 못했습니다", (err as Error).message);
@@ -233,7 +229,7 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
     if (!item) return;
     const ok = await dialog.confirm({
       title: "고정지출 삭제",
-      message: `${item.counterparty} 고정지출을 삭제할까요?\n이미 만들어진 지출 기록은 그대로 남습니다.`,
+      message: `${fixedTitle(item)} 고정지출을 삭제할까요?\n이미 만들어진 지출 기록은 그대로 남습니다.`,
       confirmLabel: "삭제",
       danger: true,
     });
@@ -252,7 +248,7 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
         <button type="button" className="icon-btn md-back" aria-label="목록으로" onClick={onBack}>
           <ChevronLeft size={20} aria-hidden="true" />
         </button>
-        <h2>{item ? item.counterparty : "새 고정지출"}</h2>
+        <h2>{item ? fixedTitle(item) : "새 고정지출"}</h2>
       </div>
 
       <div className="md-detail-body">
@@ -271,7 +267,7 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
             <input
               id="fx-amount"
               className="amount-input num"
-              inputMode="numeric"
+              inputMode={numericMode}
               autoComplete="off"
               placeholder="0"
               aria-invalid={!!errors.amount}
@@ -286,12 +282,12 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
         <div className="form-row">
           <div className="field">
             <label className="field-label" htmlFor="fx-day">
-              결제일
+              결제일 (매월)
             </label>
             <SelectControl id="fx-day" value={draft.paymentDay} onChange={(e) => set("paymentDay", Number(e.target.value))}>
               {DAYS.map((d) => (
                 <option key={d} value={d}>
-                  매월 {dayLabel(d)}
+                  {dayOptionLabel(d)}
                 </option>
               ))}
             </SelectControl>

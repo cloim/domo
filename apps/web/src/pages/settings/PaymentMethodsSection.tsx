@@ -15,10 +15,10 @@ import { useSearchParams } from "react-router";
 import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
 import { api } from "../../lib/api.ts";
-import { formatShortDate, formatWon } from "../../lib/format.ts";
+import { dayLabel, dayOptionLabel, formatShortDate, formatWon } from "../../lib/format.ts";
 import { useHousehold, useHouseholdMutation, type HouseholdData } from "../../lib/queries.ts";
 import { useCardBills } from "../../lib/useCardBills.ts";
-import { useMedia } from "../../lib/useMedia.ts";
+import { useMedia, useNumericInputMode } from "../../lib/useMedia.ts";
 
 const TWO_PANE = "(min-width: 1280px)";
 const NEW = "new";
@@ -29,7 +29,6 @@ const OFFSETS = [
   { value: 0, label: "당월" },
 ];
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
-const dayLabel = (d: number) => (d === 31 ? "말일" : `${d}일`);
 
 export function PaymentMethodsSection() {
   const { data } = useHousehold();
@@ -175,6 +174,7 @@ interface EditorProps {
 function MethodEditor({ data, method, bill, onBack, onSaved }: EditorProps) {
   const dialog = useDialog();
   const [draft, setDraft] = useState<Draft>(() => toDraft(method));
+  const numericMode = useNumericInputMode();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [customIssuer, setCustomIssuer] = useState(() => !!method?.issuer && !CARD_ISSUERS.includes(method.issuer));
   const [customHolder, setCustomHolder] = useState(() => !!method?.holderName);
@@ -327,7 +327,7 @@ function MethodEditor({ data, method, bill, onBack, onSaved }: EditorProps) {
                 <input
                   id="pm-last4"
                   className="input num"
-                  inputMode="numeric"
+                  inputMode={numericMode}
                   maxLength={4}
                   placeholder="1234"
                   aria-invalid={!!errors.last4}
@@ -381,7 +381,7 @@ function MethodEditor({ data, method, bill, onBack, onSaved }: EditorProps) {
                     <SelectControl aria-label="집계 시작일" value={draft.cycleStartDay} onChange={(e) => set("cycleStartDay", Number(e.target.value))}>
                       {DAYS.map((d) => (
                         <option key={d} value={d}>
-                          {dayLabel(d)}
+                          {dayOptionLabel(d)}
                         </option>
                       ))}
                     </SelectControl>
@@ -398,17 +398,20 @@ function MethodEditor({ data, method, bill, onBack, onSaved }: EditorProps) {
                     <SelectControl aria-label="집계 종료일" value={draft.cycleEndDay} onChange={(e) => set("cycleEndDay", Number(e.target.value))}>
                       {DAYS.map((d) => (
                         <option key={d} value={d}>
-                          {dayLabel(d)}
+                          {dayOptionLabel(d)}
                         </option>
                       ))}
                     </SelectControl>
                   </div>
                   <div className="cycle-row">
                     <span className="cycle-label">결제일</span>
+                    <span className="cycle-label" style={{ width: "auto" }}>
+                      매월
+                    </span>
                     <SelectControl aria-label="결제일" value={draft.paymentDay} onChange={(e) => set("paymentDay", Number(e.target.value))}>
                       {DAYS.map((d) => (
                         <option key={d} value={d}>
-                          매월 {dayLabel(d)}
+                          {dayOptionLabel(d)}
                         </option>
                       ))}
                     </SelectControl>

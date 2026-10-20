@@ -13,6 +13,7 @@ import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
 import { formatWon } from "../../lib/format.ts";
+import { useNumericInputMode } from "../../lib/useMedia.ts";
 import { useDeleteTransaction, useSaveTransaction, type HouseholdData } from "../../lib/queries.ts";
 
 const LAST_METHOD_KEY = "domo.lastPaymentMethod";
@@ -46,6 +47,7 @@ export function EntryForm({ data, kind: initialKind, transaction, canEdit, sugge
   const save = useSaveTransaction();
   const remove = useDeleteTransaction();
   const listId = useId();
+  const numericMode = useNumericInputMode();
 
   const activeMethods = data.paymentMethods.filter((m) => !m.archived || m.id === transaction?.paymentMethodId);
   const defaultMethod = () => activeMethods.find((m) => m.id === readLastMethod())?.id ?? activeMethods[0]?.id ?? null;
@@ -199,7 +201,7 @@ export function EntryForm({ data, kind: initialKind, transaction, canEdit, sugge
               <input
                 id="amount"
                 className="amount-input num"
-                inputMode="numeric"
+                inputMode={numericMode}
                 autoComplete="off"
                 placeholder="0"
                 aria-invalid={!!errors.amount}
