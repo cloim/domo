@@ -48,4 +48,12 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 알림 감시 대상 앱을 설치된 전체 앱에서 고른다. Play 스토어가 아닌 GitHub 배포라 사용한다. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- 광고를 쓰지 않는다. 라이브러리가 끌고 오는 광고 식별자와 추적 권한은 빼서 Play 프로텍트 오탐을 줄인다. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_CUSTOM_AUDIENCE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_TOPICS" tools:node="remove" />
+    <uses-permission android:name="com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE" tools:node="remove" />
 </manifest>
