@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { transactionKinds } from "./schemas.ts";
+import { NOTIFY_MATCH_FIELDS } from "./notifyTemplate.ts";
 
 /** 기기별 알림 연동 설정. 기기와 서버가 같은 모양을 쓴다. */
 export const notifyTargetSchema = z.object({
@@ -20,6 +21,9 @@ export const notifyTemplateSchema = z.object({
   enabled: z.boolean(),
   sampleTitle: z.string().max(500),
   sampleText: z.string().max(4000),
+  matchField: z.enum(NOTIFY_MATCH_FIELDS).optional(),
+  sampleRawText: z.string().max(4000).nullable().optional(),
+  sampleBigText: z.string().max(4000).nullable().optional(),
 });
 
 export const notifyDeviceConfigSchema = z.object({
@@ -43,6 +47,12 @@ export const notifyUploadSchema = z.object({
         text: z.string().max(4000),
         postedAt: z.number().int().positive(),
         matchedTemplateId: z.string().max(64).nullable(),
+        eventKey: z.string().regex(/^[a-f0-9]{64}$/).nullable().optional(),
+        rawText: z.string().max(4000).nullable().optional(),
+        bigText: z.string().max(4000).nullable().optional(),
+        notificationKey: z.string().max(1000).nullable().optional(),
+        eventAt: z.number().int().positive().nullable().optional(),
+        revision: z.number().int().nonnegative().default(0),
       }),
     )
     .max(200),

@@ -1,4 +1,4 @@
-import { applyNotifyTemplate, validateNotifyPattern, type NotifyTemplate, type TransactionKind } from "@domo/core";
+import { applyNotifyTemplate, notificationMatchText, NOTIFY_MATCH_FIELDS, validateNotifyPattern, type NotifyTemplate, type NotifyMatchField, type TransactionKind } from "@domo/core";
 import { ChevronLeft, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -106,7 +106,7 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
 
   const [draft, setDraft] = useState<NotifyTemplate>(
     () =>
-      template ?? {
+      template ? { ...template, matchField: template.matchField ?? "title_body" } : {
         id: crypto.randomUUID(),
         name: "",
         packageName: fromApp ?? targets[0]?.packageName ?? "",
@@ -117,6 +117,9 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
         enabled: true,
         sampleTitle: "",
         sampleText: "",
+        matchField: "title_body",
+        sampleRawText: "",
+        sampleBigText: "",
       },
   );
   const [samplePostedAt, setSamplePostedAt] = useState(() => toLocalDateTime(Date.now()));
@@ -133,15 +136,17 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
     if (template || !fromId || !recent.data) return;
     const n = recent.data.find((x) => x.id === fromId);
     if (!n) return;
-    setDraft((d) => (d.sampleText || d.sampleTitle ? d : { ...d, sampleTitle: n.title, sampleText: n.text }));
+    setDraft((d) => (d.sampleText || d.sampleTitle ? d : { ...d, sampleTitle: n.title, sampleText: n.text, sampleRawText: n.rawText, sampleBigText: n.bigText }));
     setSamplePostedAt(toLocalDateTime(n.postedAt));
   }, [template, fromId, recent.data]);
 
   const patternProblem = draft.pattern ? validateNotifyPattern(draft.pattern) : null;
-  const sampleResult = draft.pattern && !patternProblem ? applyNotifyTemplate(draft, draft.sampleTitle, draft.sampleText, samplePostedAt) : null;
+  const sampleFields = { rawText: draft.sampleRawText, bigText: draft.sampleBigText };
+  const matchingText = notificationMatchText(draft.matchField ?? "title_body", { title: draft.sampleTitle, text: draft.sampleText, ...sampleFields });
+  const sampleResult = draft.pattern && !patternProblem ? applyNotifyTemplate(draft, draft.sampleTitle, draft.sampleText, samplePostedAt, sampleFields) : null;
   const recentMatches = useMemo(() => {
     if (!draft.pattern || patternProblem || !recent.data) return null;
-    return recent.data.filter((n) => applyNotifyTemplate(draft, n.title, n.text, toLocalDateTime(n.postedAt)));
+    return recent.data.filter((n) => applyNotifyTemplate(draft, n.title, n.text, toLocalDateTime(n.postedAt), n));
   }, [draft, patternProblem, recent.data]);
 
   const methods = data.paymentMethods.filter((m) => !m.archived || m.id === draft.paymentMethodId);
@@ -154,7 +159,7 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
     setAnalyzing(true);
     setAiProblem(null);
     try {
-      const { suggestion, problem } = await analyzeNotification({ appLabel, title: draft.sampleTitle, text: draft.sampleText, postedAt: samplePostedAt });
+      const { suggestion, problem } = await analyzeNotification({ appLabel, title: draft.sampleTitle, text: draft.sampleText, postedAt: samplePostedAt, matchField: draft.matchField, ...sampleFields });
       setDraft((d) => ({ ...d, name: d.name || suggestion.name, kind: suggestion.kind, pattern: suggestion.pattern }));
       setAiProblem(problem);
     } catch (err) {
@@ -226,8 +231,17 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
 
         <div className="field">
           <span className="field-label">예시 알림</span>
-          <input className="input" aria-label="예시 알림 제목" placeholder="제목" value={draft.sampleTitle} onChange={(e) => set("sampleTitle", e.target.value)} />
-          <textarea className="input" aria-label="예시 알림 본문" placeholder="본문" rows={3} value={draft.sampleText} onChange={(e) => set("sampleText", e.target.value)} />
+          <input className="input" aria-label="예시 알림 제목 title" placeholder="title, 제목" value={draft.sampleTitle} onChange={(e) => set("sampleTitle", e.target.value)} />
+          <textarea className="input" aria-label="예시 알림 text" placeholder="text, 기본 본문" rows={3} value={draft.sampleRawText ?? ""} onChange={(e) => setDraft((d) => ({ ...d, sampleRawText: e.target.value, sampleText: d.sampleBigText?.trim() ? d.sampleBigText : e.target.value }))} />
+          <textarea className="input" aria-label="예시 알림 bigText" placeholder="bigText, 펼친 본문" rows={3} value={draft.sampleBigText ?? ""} onChange={(e) => setDraft((d) => ({ ...d, sampleBigText: e.target.value, sampleText: e.target.value.trim() ? e.target.value : d.sampleRawText ?? d.sampleText }))} />
+          {draft.sampleRawText == null && draft.sampleBigText == null && draft.sampleText && <p className="hint">이전 알림은 원본 text와 bigText를 수집하지 않았어요. 기존 body는 제목+본문 또는 본문 자동으로 검사할 수 있습니다.</p>}
+          <label className="field-label" htmlFor="nt-match-field">매칭할 필드</label>
+          <SelectControl id="nt-match-field" value={draft.matchField ?? "title_body"} onChange={(e) => set("matchField", e.target.value as NotifyMatchField)}>
+            {NOTIFY_MATCH_FIELDS.map((field) => <option key={field} value={field}>{{ title_body: "제목 + 자동 본문", body: "자동 본문 (body)", title: "제목 (title)", text: "기본 본문 (text)", bigText: "펼친 본문 (bigText)" }[field]}</option>)}
+          </SelectControl>
+          <span className="hint">자동 본문은 비어 있지 않은 bigText를 우선 사용하고, 없으면 text를 사용해요.</span>
+          <label className="field-label" htmlFor="nt-match-preview">실제 매칭 원문</label>
+          <textarea id="nt-match-preview" className="input mono" rows={3} value={matchingText} readOnly />
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button type="button" className="btn btn-ghost btn-sm" disabled={!aiReady || analyzing || !(draft.sampleTitle || draft.sampleText)} onClick={() => void analyze()}>
               <Sparkles size={15} aria-hidden="true" /> {analyzing ? "분석 중" : "AI로 정규식 만들기"}
@@ -263,7 +277,7 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
             value={draft.pattern}
             onChange={(e) => set("pattern", e.target.value)}
           />
-          <span className="hint">제목과 본문을 줄바꿈으로 이은 글에 적용해요. 이름 그룹: amount(필수), counterparty, memo, month, day, hour, minute</span>
+          <span className="hint">선택한 필드의 원문에 적용해요. 이름 그룹: amount(필수), counterparty, memo, month, day, hour, minute</span>
           {patternProblem && <span className="field-error">{patternProblem}</span>}
           {draft.pattern && !patternProblem && (draft.sampleTitle || draft.sampleText) && (
             <div className={`readonly-note${sampleResult ? "" : " is-bad"}`}>

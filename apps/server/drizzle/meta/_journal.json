@@ -50,6 +50,13 @@
       "when": 1792489534116,
       "tag": "0006_card_settlements",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792491905232,
+      "tag": "0007_notification_fields",
+      "breakpoints": true
     }
   ]
 }

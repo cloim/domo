@@ -56,36 +56,54 @@ public class DomoNotificationListener extends NotificationListenerService {
 
         Bundle extras = n.extras;
         String title = text(extras.getCharSequence(Notification.EXTRA_TITLE));
-        CharSequence big = extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
-        String body = text(big != null ? big : extras.getCharSequence(Notification.EXTRA_TEXT));
+        if (title.length() > 500) title = title.substring(0, 500);
+        String rawText = text(extras.getCharSequence(Notification.EXTRA_TEXT));
+        String bigText = text(extras.getCharSequence(Notification.EXTRA_BIG_TEXT));
+        String body = bigText.isEmpty() ? rawText : bigText;
         if (title.isEmpty() && body.isEmpty()) return;
 
         long postedAt = sbn.getPostTime();
+        long messageAt = 0;
+        String message = rawText;
+        NotificationCompat.MessagingStyle style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n);
+        if (style != null) {
+            java.util.List<NotificationCompat.MessagingStyle.Message> messages = style.getMessages();
+            if (!messages.isEmpty()) {
+                NotificationCompat.MessagingStyle.Message last = messages.get(messages.size() - 1);
+                messageAt = last.getTimestamp();
+                message = text(last.getText());
+            }
+        }
+        long eventAt = messageAt > 0 ? messageAt : n.when > 0 ? n.when : postedAt;
+        String eventKey = NotifyEvent.key(sbn.getPackageName(), sbn.getKey(), eventAt, messageAt, title, message);
         String postedLocal = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.ROOT).format(new Date(postedAt));
 
         String matchedId = null;
+        JSONObject matchedTemplate = null;
+        NotifyMatcher.Match matched = null;
         JSONArray templates = store.templates();
         for (int i = 0; i < templates.length(); i++) {
             JSONObject t = templates.optJSONObject(i);
             if (t == null || !t.optBoolean("enabled", true) || !sbn.getPackageName().equals(t.optString("packageName"))) continue;
-            NotifyMatcher.Match match = NotifyMatcher.apply(t.optString("pattern"), t.optString("kind", "expense"), title, body, postedLocal);
+            NotifyMatcher.Match match = NotifyMatcher.apply(t.optString("pattern"), t.optString("kind", "expense"), t.optString("matchField", "title_body"), title, body, rawText, bigText, postedLocal);
             if (match == null) continue;
             matchedId = t.optString("id");
-            // 같은 알림이 갱신되어 여러 번 와도 등록 알림은 한 번만 띄운다.
-            String fingerprint = sbn.getPackageName() + "|" + NotifyMatcher.body(title, body).hashCode();
-            if (store.markIfNew(fingerprint, postedAt)) {
-                postRegistration(t, match, sbn.getPackageName());
-                if (target.optBoolean("removeOriginal", false)) cancelNotification(sbn.getKey());
-            }
+            matchedTemplate = t;
+            matched = match;
             break;
         }
-        store.insertNotification(sbn.getPackageName(), title, body, postedAt, matchedId);
+        boolean changed = store.insertNotification(sbn.getPackageName(), title, body, rawText, bigText, sbn.getKey(), eventKey, eventAt, postedAt, matchedId);
+        if (changed && matched != null && store.markIfNew(eventKey, postedAt)) {
+            postRegistration(matchedTemplate, matched, sbn.getPackageName());
+            if (target.optBoolean("removeOriginal", false)) cancelNotification(sbn.getKey());
+        }
         // PC에서도 볼 수 있게 바로 서버에 올린다. 실패분은 다음 알림 때 함께 보낸다.
         NotifySync.kick(this);
     }
 
     private static String text(CharSequence value) {
-        return value == null ? "" : value.toString().trim();
+        String result = value == null ? "" : value.toString().trim();
+        return result.length() > 4000 ? result.substring(0, 4000) : result;
     }
 
     private void postRegistration(JSONObject template, NotifyMatcher.Match match, String sourcePackage) {

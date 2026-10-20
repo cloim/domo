@@ -83,11 +83,9 @@ export async function notifyRoutes(app: FastifyInstance, { db, config }: { db: D
     const { items } = parse(notifyUploadSchema, req.body);
     const keepFrom = Date.now() - NOTIFY_KEEP_DAYS * 86_400_000;
     const fresh = items.filter((i) => i.postedAt >= keepFrom);
-    if (fresh.length > 0) {
-      await db
-        .insert(notifyNotifications)
-        .values(
-          fresh.map((i) => ({
+    await db.transaction(async (tx) => {
+      for (const i of fresh) {
+        const values = {
             deviceId: device.id,
             localId: i.localId,
             packageName: i.packageName,
@@ -95,10 +93,18 @@ export async function notifyRoutes(app: FastifyInstance, { db, config }: { db: D
             textEnc: encryptSecret(config, i.text),
             postedAt: new Date(i.postedAt),
             matchedTemplateId: i.matchedTemplateId,
-          })),
-        )
-        .onConflictDoNothing();
-    }
+            eventKey: i.eventKey ?? null,
+            revision: i.revision,
+            fieldsEnc: i.rawText !== undefined || i.bigText !== undefined ? encryptSecret(config, JSON.stringify({ rawText: i.rawText ?? null, bigText: i.bigText ?? null, notificationKey: i.notificationKey ?? null, eventAt: i.eventAt ?? null })) : null,
+        };
+        if (!i.eventKey) await tx.insert(notifyNotifications).values(values).onConflictDoNothing();
+        else await tx.insert(notifyNotifications).values(values).onConflictDoUpdate({
+          target: [notifyNotifications.deviceId, notifyNotifications.eventKey],
+          set: { titleEnc: values.titleEnc, textEnc: values.textEnc, fieldsEnc: values.fieldsEnc, matchedTemplateId: values.matchedTemplateId, revision: i.revision },
+          setWhere: sql`${notifyNotifications.revision} <= ${i.revision}`,
+        });
+      }
+    });
     await db.update(notifyDevices).set({ lastSeenAt: new Date() }).where(eq(notifyDevices.id, device.id));
     return { accepted: items.length, configVersion: device.configVersion };
   });
@@ -115,6 +121,8 @@ export async function notifyRoutes(app: FastifyInstance, { db, config }: { db: D
       text: decryptSecret(config, r.textEnc),
       postedAt: r.postedAt.getTime(),
       matchedTemplateId: r.matchedTemplateId,
+      eventKey: r.eventKey,
+      ...(r.fieldsEnc ? JSON.parse(decryptSecret(config, r.fieldsEnc)) : { rawText: null, bigText: null, notificationKey: null, eventAt: null }),
     }));
   });
 

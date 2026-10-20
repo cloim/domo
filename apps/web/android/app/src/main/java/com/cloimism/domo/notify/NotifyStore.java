@@ -29,7 +29,7 @@ public final class NotifyStore {
     /** 앱마다 보관하는 최근 알림 수와 기간 */
     static final int KEEP_PER_APP = 200;
     static final long KEEP_MS = 30L * 24 * 60 * 60 * 1000;
-    /** 같은 내용의 알림을 다시 등록 알림으로 띄우지 않는 기간 */
+    /** 같은 이벤트를 다시 등록 알림으로 띄우지 않는 기간 */
     static final long DEDUPE_MS = 24L * 60 * 60 * 1000;
 
     private final SharedPreferences prefs;
@@ -124,7 +124,7 @@ public final class NotifyStore {
 
     // ───── 중복 방지 ─────
 
-    /** 처음 보는 내용이면 기록하고 true. 하루 안에 같은 내용이 다시 오면 false */
+    /** 처음 보는 이벤트이면 기록하고 true. 같은 이벤트의 재통지는 false */
     public synchronized boolean markIfNew(String fingerprint, long now) {
         JSONObject recent;
         try {
@@ -159,21 +159,49 @@ public final class NotifyStore {
 
     // ───── 알림 기록 ─────
 
-    public long insertNotification(String packageName, String title, String text, long postedAt, String matchedTemplateId) {
+    public boolean insertNotification(String packageName, String title, String text, String rawText, String bigText, String notificationKey, String eventKey, long eventAt, long postedAt, String matchedTemplateId) {
         SQLiteDatabase w = db.getWritableDatabase();
+        boolean changed = true;
+        w.beginTransaction();
+        try {
+        long existingId = -1;
+        int revision = 0;
+        try (Cursor c = w.query("notifications", null, "event_key = ?", new String[] { eventKey }, null, null, null)) {
+            if (c.moveToFirst()) {
+                existingId = c.getLong(c.getColumnIndexOrThrow("id"));
+                revision = c.getInt(c.getColumnIndexOrThrow("revision"));
+                changed = !java.util.Objects.equals(title, c.getString(c.getColumnIndexOrThrow("title")))
+                    || !java.util.Objects.equals(text, c.getString(c.getColumnIndexOrThrow("body")))
+                    || !java.util.Objects.equals(rawText, c.getString(c.getColumnIndexOrThrow("raw_text")))
+                    || !java.util.Objects.equals(bigText, c.getString(c.getColumnIndexOrThrow("big_text")))
+                    || !java.util.Objects.equals(matchedTemplateId, c.getString(c.getColumnIndexOrThrow("template_id")));
+            }
+        }
+        if (changed) {
         ContentValues v = new ContentValues();
         v.put("pkg", packageName);
         v.put("title", title);
         v.put("body", text);
-        v.put("posted_at", postedAt);
+        if (existingId < 0) v.put("posted_at", postedAt);
         v.put("template_id", matchedTemplateId);
-        long id = w.insert("notifications", null, v);
+        v.put("raw_text", rawText);
+        v.put("big_text", bigText);
+        v.put("notification_key", notificationKey);
+        v.put("event_key", eventKey);
+        v.put("event_at", eventAt);
+        v.put("revision", revision + 1);
+        v.put("synced", 0);
+        if (existingId < 0) w.insertOrThrow("notifications", null, v);
+        else w.update("notifications", v, "id = ?", new String[] { String.valueOf(existingId) });
+        }
         w.delete("notifications", "posted_at < ?", new String[] { String.valueOf(postedAt - KEEP_MS) });
         w.execSQL(
             "DELETE FROM notifications WHERE pkg = ? AND id NOT IN (SELECT id FROM notifications WHERE pkg = ? ORDER BY posted_at DESC LIMIT " + KEEP_PER_APP + ")",
             new Object[] { packageName, packageName }
         );
-        return id;
+        w.setTransactionSuccessful();
+        } finally { w.endTransaction(); }
+        return changed;
     }
 
     /** 아직 서버에 올리지 못한 알림. 오래된 것부터 */
@@ -187,6 +215,7 @@ public final class NotifyStore {
                 o.put("title", nonNull(c.getString(c.getColumnIndexOrThrow("title"))));
                 o.put("text", nonNull(c.getString(c.getColumnIndexOrThrow("body"))));
                 o.put("postedAt", c.getLong(c.getColumnIndexOrThrow("posted_at")));
+                putFields(o, c);
                 String template = c.getString(c.getColumnIndexOrThrow("template_id"));
                 o.put("matchedTemplateId", template == null ? JSONObject.NULL : template);
                 out.put(o);
@@ -203,12 +232,22 @@ public final class NotifyStore {
         v.put("synced", 1);
         for (int i = 0; i < items.length(); i++) {
             JSONObject o = items.optJSONObject(i);
-            if (o != null) w.update("notifications", v, "id = ?", new String[] { String.valueOf(o.optLong("localId")) });
+            if (o != null) w.update("notifications", v, "id = ? AND revision = ?", new String[] { String.valueOf(o.optLong("localId")), String.valueOf(o.optInt("revision")) });
         }
     }
 
     private static String nonNull(String value) {
         return value == null ? "" : value;
+    }
+
+    private static void putFields(JSONObject o, Cursor c) throws JSONException {
+        for (String[] pair : new String[][] { {"rawText", "raw_text"}, {"bigText", "big_text"}, {"notificationKey", "notification_key"}, {"eventKey", "event_key"} }) {
+            String value = c.getString(c.getColumnIndexOrThrow(pair[1]));
+            o.put(pair[0], value == null ? JSONObject.NULL : value);
+        }
+        int at = c.getColumnIndexOrThrow("event_at");
+        o.put("eventAt", c.isNull(at) ? JSONObject.NULL : c.getLong(at));
+        o.put("revision", c.getInt(c.getColumnIndexOrThrow("revision")));
     }
 
     public JSONArray notifications(String packageName, int limit) {
@@ -223,6 +262,7 @@ public final class NotifyStore {
                 o.put("title", c.getString(c.getColumnIndexOrThrow("title")));
                 o.put("text", c.getString(c.getColumnIndexOrThrow("body")));
                 o.put("postedAt", c.getLong(c.getColumnIndexOrThrow("posted_at")));
+                putFields(o, c);
                 String template = c.getString(c.getColumnIndexOrThrow("template_id"));
                 o.put("matchedTemplateId", template == null ? JSONObject.NULL : template);
                 out.put(o);
@@ -240,21 +280,26 @@ public final class NotifyStore {
     private static final class Db extends SQLiteOpenHelper {
         Db(Context context) {
             // 2: 서버 업로드 여부(synced)
-            super(context, "domo_notify.db", null, 2);
+            super(context, "domo_notify.db", null, 3);
         }
 
         @Override
         public void onCreate(SQLiteDatabase d) {
             d.execSQL(
-                "CREATE TABLE notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, pkg TEXT NOT NULL, title TEXT, body TEXT, posted_at INTEGER NOT NULL, template_id TEXT, synced INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, pkg TEXT NOT NULL, title TEXT, body TEXT, posted_at INTEGER NOT NULL, template_id TEXT, synced INTEGER NOT NULL DEFAULT 0, raw_text TEXT, big_text TEXT, notification_key TEXT, event_key TEXT, event_at INTEGER, revision INTEGER NOT NULL DEFAULT 0)"
             );
             d.execSQL("CREATE INDEX notifications_pkg_posted ON notifications (pkg, posted_at)");
+            d.execSQL("CREATE UNIQUE INDEX notifications_event_uq ON notifications (event_key)");
         }
 
         @Override
         public void onUpgrade(SQLiteDatabase d, int oldVersion, int newVersion) {
             // 이전에 받은 알림도 올리도록 0(미전송)으로 둔다.
             if (oldVersion < 2) d.execSQL("ALTER TABLE notifications ADD COLUMN synced INTEGER NOT NULL DEFAULT 0");
+            if (oldVersion < 3) {
+                for (String column : new String[] { "raw_text TEXT", "big_text TEXT", "notification_key TEXT", "event_key TEXT", "event_at INTEGER", "revision INTEGER NOT NULL DEFAULT 0" }) d.execSQL("ALTER TABLE notifications ADD COLUMN " + column);
+                d.execSQL("CREATE UNIQUE INDEX notifications_event_uq ON notifications (event_key)");
+            }
         }
     }
 }

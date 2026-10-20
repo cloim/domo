@@ -33,6 +33,22 @@ public final class NotifyMatcher {
         return (title == null ? "" : title) + "\n" + (text == null ? "" : text);
     }
 
+    public static String input(String field, String title, String body, String rawText, String bigText) {
+        String content = bigText != null && !bigText.trim().isEmpty() ? bigText : rawText != null ? rawText : body;
+        switch (field) {
+            case "title_body": return body(title, content);
+            case "body": return content;
+            case "title": return title;
+            case "text": return rawText == null ? "" : rawText;
+            case "bigText": return bigText == null ? "" : bigText;
+            default: return "";
+        }
+    }
+
+    public static Match apply(String pattern, String kind, String field, String title, String body, String rawText, String bigText, String postedAt) {
+        return applyToInput(pattern, kind, input(field, title, body, rawText, bigText), postedAt);
+    }
+
     /** 정의되지 않은 그룹은 예외 대신 null 로 돌려준다. */
     private static String group(Matcher m, String name) {
         try {
@@ -59,9 +75,13 @@ public final class NotifyMatcher {
 
     /** postedAt 은 yyyy-MM-ddTHH:mm. 맞지 않거나 금액이 없으면 null */
     public static Match apply(String pattern, String kind, String title, String text, String postedAt) {
+        return applyToInput(pattern, kind, body(title, text), postedAt);
+    }
+
+    private static Match applyToInput(String pattern, String kind, String input, String postedAt) {
         Matcher m;
         try {
-            m = Pattern.compile(pattern).matcher(body(title, text));
+            m = Pattern.compile(pattern).matcher(input);
         } catch (PatternSyntaxException e) {
             return null;
         }

@@ -296,6 +296,30 @@ describe("알림 연동 기기 동기화", () => {
   });
 });
 
+describe("알림 원본 필드와 이벤트 갱신", () => {
+  it("원본을 암호화하고 재게시와 역순 재전송은 합치며 별도 메시지는 유지한다", async () => {
+    const me = await login("notify-fields@test.com", "알림 테스트");
+    const deviceId = "3b7c6a52-6d0a-4f3e-9a51-2a3b4c5d6e7f";
+    await me("PUT", `/api/notify/devices/${deviceId}`, { name: "알림 기기" });
+    const event = { localId: 1, packageName: "com.kakao.talk", title: "카드알림", text: "승인 1,000원", rawText: "승인", bigText: "승인 1,000원", postedAt: Date.now(), eventAt: Date.now(), notificationKey: "알림키", eventKey: "a".repeat(64), revision: 1, matchedTemplateId: null };
+    const upload = (items: object[]) => me("POST", `/api/notify/devices/${deviceId}/notifications`, { items });
+    expect((await upload([event, { ...event, localId: 2 }])).statusCode).toBe(200);
+    let list = (await me("GET", `/api/notify/devices/${deviceId}/notifications`)).json();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ rawText: "승인", bigText: "승인 1,000원", notificationKey: "알림키" });
+    await upload([{ ...event, revision: 2, text: "승인 2,000원", bigText: "승인 2,000원" }]);
+    await upload([event]);
+    list = (await me("GET", `/api/notify/devices/${deviceId}/notifications`)).json();
+    expect(list[0].text).toBe("승인 2,000원");
+    await upload([{ ...event, localId: 3, eventKey: "b".repeat(64), postedAt: event.postedAt + 1 }]);
+    expect((await me("GET", `/api/notify/devices/${deviceId}/notifications`)).json()).toHaveLength(2);
+    expect((await upload([{ ...event, eventKey: "invalid" }])).statusCode).toBe(400);
+    const encrypted = await db.execute(sql`SELECT title_enc, text_enc, fields_enc FROM notify_notifications WHERE device_id = ${deviceId}`);
+    expect(JSON.stringify(encrypted)).not.toContain("알림키");
+    expect(JSON.stringify(encrypted)).not.toContain("승인");
+  });
+});
+
 describe("카드 정산", () => {
   it("서버 재계산, 할부, 가계 격리, 동시 중복과 수동 납부를 처리한다", async () => {
     const owner = await login("settle@test.com", "정산");

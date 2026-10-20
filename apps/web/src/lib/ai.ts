@@ -1,4 +1,4 @@
-import type { AiConfig, AiSettings, NotifyAnalysis, NotifyMatch } from "@domo/core";
+import type { AiConfig, AiSettings, NotifyAnalysis, NotifyMatch, NotifyMatchField } from "@domo/core";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api.ts";
 
@@ -20,5 +20,5 @@ export const saveAiSettings = (input: AiConfig & { key?: string | null }) => api
 
 export const listModels = (override: { config?: AiConfig; key?: string } = {}) => api<string[]>("/api/ai/models", { method: "POST", body: override });
 
-export const analyzeNotification = (sample: { appLabel: string; title: string; text: string; postedAt: string }, override: { config?: AiConfig; key?: string } = {}) =>
+export const analyzeNotification = (sample: { appLabel: string; title: string; text: string; postedAt: string; matchField?: NotifyMatchField; rawText?: string | null; bigText?: string | null }, override: { config?: AiConfig; key?: string } = {}) =>
   api<AnalysisResult>("/api/ai/analyze-notification", { method: "POST", body: { sample, ...override } });

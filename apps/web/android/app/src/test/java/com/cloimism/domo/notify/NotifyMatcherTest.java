@@ -21,7 +21,7 @@ public class NotifyMatcherTest {
         for (int i = 0; i < cases.length(); i++) {
             JSONObject c = cases.getJSONObject(i);
             String name = c.getString("name");
-            NotifyMatcher.Match m = NotifyMatcher.apply(c.getString("pattern"), c.getString("kind"), c.getString("title"), c.getString("text"), c.getString("postedAt"));
+            NotifyMatcher.Match m = NotifyMatcher.apply(c.getString("pattern"), c.getString("kind"), c.optString("matchField", "title_body"), c.getString("title"), c.getString("text"), c.has("rawText") ? c.getString("rawText") : null, c.has("bigText") ? c.getString("bigText") : null, c.getString("postedAt"));
             if (c.isNull("expected")) {
                 assertNull(name, m);
                 continue;

@@ -5,6 +5,7 @@ import {
   aiRequestSchema,
   aiSettingsInputSchema,
   applyNotifyTemplate,
+  notificationMatchText,
   NOTIFY_ANALYSIS_PROMPT,
   notifyAnalysisSchema,
   validateNotifyPattern,
@@ -163,13 +164,13 @@ export async function aiRoutes(app: FastifyInstance, { db, config }: { db: Db; c
       aiConfigSchema.parse(cfg),
       key,
       NOTIFY_ANALYSIS_PROMPT,
-      `앱: ${sample.appLabel}\n제목: ${sample.title}\n본문: ${sample.text}`,
+      `앱: ${sample.appLabel}\n매칭 필드: ${sample.matchField}\n매칭할 원문:\n${notificationMatchText(sample.matchField, sample)}`,
       config.aiAllowPrivateHosts,
     );
     const parsed = notifyAnalysisSchema.safeParse(extractJson(text));
     if (!parsed.success) throw new HttpError(502, "AI 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.");
     const invalid = validateNotifyPattern(parsed.data.pattern);
-    const match = invalid ? null : applyNotifyTemplate(parsed.data, sample.title, sample.text, sample.postedAt);
+    const match = invalid ? null : applyNotifyTemplate({ ...parsed.data, matchField: sample.matchField }, sample.title, sample.text, sample.postedAt, sample);
     const problem = invalid ? `AI가 만든 정규식을 쓸 수 없습니다. ${invalid}` : match ? null : "AI가 만든 정규식이 이 알림에 맞지 않습니다. 다시 분석하거나 직접 고쳐 주세요.";
     return { suggestion: parsed.data, match, problem, elapsedMs: Date.now() - started };
   });

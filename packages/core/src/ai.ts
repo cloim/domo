@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NOTIFY_MATCH_FIELDS } from "./notifyTemplate.ts";
 
 /**
  * AI 호출 형식은 두 가지다.
@@ -61,12 +62,15 @@ export const aiAnalyzeSchema = aiRequestSchema.extend({
     appLabel: z.string().max(100),
     title: z.string().max(500),
     text: z.string().max(4000),
+    matchField: z.enum(NOTIFY_MATCH_FIELDS).default("title_body"),
+    rawText: z.string().max(4000).nullable().optional(),
+    bigText: z.string().max(4000).nullable().optional(),
     postedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
   }),
 });
 
 export const NOTIFY_ANALYSIS_PROMPT = `너는 한국 금융 알림(카드 승인, 계좌 입출금, 간편결제)의 문구 템플릿을 분석해 정규식을 만든다.
-입력은 알림의 제목과 본문이다. 앱은 "제목 + 줄바꿈(\\n) + 본문" 문자열에 정규식을 적용한다.
+입력의 '매칭할 원문' 문자열에 정규식을 그대로 적용한다. 선택되지 않은 필드나 추가 줄바꿈을 가정하지 않는다.
 
 규칙:
 - JavaScript와 Java 정규식에서 모두 동작하는 문법만 쓴다. 플래그 없이 동작해야 한다. 가변 길이 lookbehind는 쓰지 않는다.

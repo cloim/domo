@@ -31,6 +31,12 @@ export interface CapturedNotification {
   /** epoch ms */
   postedAt: number;
   matchedTemplateId: string | null;
+  rawText?: string | null;
+  bigText?: string | null;
+  notificationKey?: string | null;
+  eventAt?: number | null;
+  eventKey?: string | null;
+  duplicateCount?: number;
 }
 
 /** 등록 알림을 눌렀을 때 넘어오는 값 */

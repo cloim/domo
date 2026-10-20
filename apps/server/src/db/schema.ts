@@ -48,10 +48,13 @@ export const notifyNotifications = pgTable(
     packageName: text("package_name").notNull(),
     titleEnc: text("title_enc").notNull(),
     textEnc: text("text_enc").notNull(),
+    fieldsEnc: text("fields_enc"),
+    eventKey: text("event_key"),
+    revision: integer("revision").notNull().default(0),
     postedAt: timestamp("posted_at", { withTimezone: true }).notNull(),
     matchedTemplateId: text("matched_template_id"),
   },
-  (t) => [uniqueIndex("notify_notifications_device_local_uq").on(t.deviceId, t.localId), index("notify_notifications_device_pkg_idx").on(t.deviceId, t.packageName, t.postedAt)],
+  (t) => [uniqueIndex("notify_notifications_device_local_uq").on(t.deviceId, t.localId), uniqueIndex("notify_notifications_device_event_uq").on(t.deviceId, t.eventKey), index("notify_notifications_device_pkg_idx").on(t.deviceId, t.packageName, t.postedAt)],
 );
 
 /** 모든 가계 데이터의 소유 단위. 이후 자산 모듈도 이 단위에 붙인다. */

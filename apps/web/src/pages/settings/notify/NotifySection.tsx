@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { useDialog } from "../../../components/Dialogs.tsx";
 import { Modal } from "../../../components/Modal/index.js";
 import SelectControl from "../../../components/SelectControl/index.ts";
+import { NotificationFields } from "./NotificationFields.tsx";
 import { DomoNotify, notifyHealth, notifySupported, type InstalledApp, type NotifyTarget } from "../../../lib/notify.ts";
 import { MD_TWO_PANE, useMedia } from "../../../lib/useMedia.ts";
 import {
@@ -280,6 +281,8 @@ function TargetDetail({ source, target, icon, onBack, onUpdate, onRemove }: Deta
                     <strong>{n.title}</strong>
                     <span>{n.text}</span>
                     <span className="hint">{toLocalDateTime(n.postedAt).replace("T", " ")}</span>
+                    {(n.duplicateCount ?? 1) > 1 && <span className="hint">동일 수신 기록 {n.duplicateCount}건을 합쳐 표시했어요.</span>}
+                    <NotificationFields notification={n} />
                   </div>
                   {n.matchedTemplateId && templateName(n.matchedTemplateId) ? (
                     <span className="badge badge-accent">{templateName(n.matchedTemplateId)}</span>

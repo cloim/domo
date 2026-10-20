@@ -2,6 +2,30 @@
   "comment": "알림 템플릿 적용 규칙 사례. packages/core(vitest)와 안드로이드 매처(JUnit)가 함께 쓴다.",
   "cases": [
     {
+      "name": "text만 선택하면 펼친 본문을 사용하지 않는다", "matchField": "text",
+      "pattern": "^승인 (?<amount>[\\d,]+)원$", "kind": "expense", "title": "카드", "text": "승인 9,000원", "rawText": "승인 1,000원", "bigText": "승인 9,000원", "postedAt": "2026-10-20T13:46",
+      "expected": { "kind": "expense", "amount": 1000, "counterparty": null, "memo": null, "occurredAt": "2026-10-20T13:46" }
+    },
+    {
+      "name": "bigText만 선택한다", "matchField": "bigText",
+      "pattern": "^승인 (?<amount>[\\d,]+)원$", "kind": "expense", "title": "카드", "text": "승인 9,000원", "rawText": "승인 1,000원", "bigText": "승인 9,000원", "postedAt": "2026-10-20T13:46",
+      "expected": { "kind": "expense", "amount": 9000, "counterparty": null, "memo": null, "occurredAt": "2026-10-20T13:46" }
+    },
+    {
+      "name": "제목에만 있는 금액을 선택한다", "matchField": "title",
+      "pattern": "^승인 (?<amount>[\\d,]+)원$", "kind": "expense", "title": "승인 3,000원", "text": "광고", "postedAt": "2026-10-20T13:46",
+      "expected": { "kind": "expense", "amount": 3000, "counterparty": null, "memo": null, "occurredAt": "2026-10-20T13:46" }
+    },
+    {
+      "name": "본문 자동은 빈 bigText 대신 text를 사용한다", "matchField": "body",
+      "pattern": "^승인 (?<amount>[\\d,]+)원$", "kind": "expense", "title": "카드", "text": "", "rawText": "승인 1,000원", "bigText": "  ", "postedAt": "2026-10-20T13:46",
+      "expected": { "kind": "expense", "amount": 1000, "counterparty": null, "memo": null, "occurredAt": "2026-10-20T13:46" }
+    },
+    {
+      "name": "과거 알림의 미수집 raw text를 본문으로 추측하지 않는다", "matchField": "text",
+      "pattern": "(?<amount>[\\d,]+)원", "kind": "expense", "title": "카드", "text": "승인 9,000원", "postedAt": "2026-10-20T13:46", "expected": null
+    },
+    {
       "name": "카드 승인: 금액, 거래처, 월일시분",
       "pattern": "승인 \\S+ (?<amount>[\\d,]+)원\\(\\S+\\)(?<month>\\d{2})/(?<day>\\d{2}) (?<hour>\\d{2}):(?<minute>\\d{2}) (?<counterparty>.+?) 누적",
       "kind": "expense",

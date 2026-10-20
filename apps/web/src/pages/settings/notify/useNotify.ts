@@ -1,4 +1,4 @@
-import type { NotifyDeviceConfig, NotifyTemplate } from "@domo/core";
+import { groupNotificationHistory, type NotifyDeviceConfig, type NotifyTemplate } from "@domo/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import { api } from "../../../lib/api.ts";
@@ -73,7 +73,7 @@ async function readConfig(src: NotifySource): Promise<NotifyDeviceConfig> {
     return { targets: c.targets, templates: c.templates };
   }
   const [{ targets }, { templates }] = await Promise.all([DomoNotify.getTargets(), DomoNotify.getTemplates()]);
-  return { targets, templates };
+  return { targets, templates: templates.map((t) => ({ ...t, matchField: t.matchField ?? "title_body" })) };
 }
 
 /** 대상 앱이나 템플릿을 바꾼다. 앱에서는 기기에 쓰고 서버 사본도 올려 버전을 맞춘다. */
@@ -127,10 +127,12 @@ export function useNotifications(src: NotifySource | null, packageName: string, 
     queryKey: notifyKeys.notifications(src, packageName),
     enabled: !!src && !!packageName,
     refetchInterval: refetch ? 15_000 : false,
-    queryFn: async (): Promise<CapturedNotification[]> =>
-      src!.kind === "local"
+    queryFn: async (): Promise<CapturedNotification[]> => {
+      const items = src!.kind === "local"
         ? (await DomoNotify.getNotifications({ packageName, limit })).notifications
-        : api<CapturedNotification[]>(`/api/notify/devices/${src!.deviceId}/notifications?packageName=${encodeURIComponent(packageName)}&limit=${limit}`),
+        : await api<CapturedNotification[]>(`/api/notify/devices/${src!.deviceId}/notifications?packageName=${encodeURIComponent(packageName)}&limit=${limit}`);
+      return groupNotificationHistory(items);
+    },
   });
 }
 
