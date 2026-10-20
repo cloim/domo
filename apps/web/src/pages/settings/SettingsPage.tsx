@@ -1,10 +1,11 @@
-import { ChevronRight, CreditCard, House, Info, QrCode, Shapes, Users } from "lucide-react";
+import { ChevronRight, CreditCard, House, Info, QrCode, Repeat, Shapes, Users } from "lucide-react";
 import { NavLink, useOutletContext, useParams } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
 import { useHousehold, type Me } from "../../lib/queries.ts";
 import { useMedia } from "../../lib/useMedia.ts";
 import { AppSection } from "./AppSection.tsx";
 import { CategoriesSection } from "./CategoriesSection.tsx";
+import { FixedExpensesSection } from "./FixedExpensesSection.tsx";
 import { HouseholdSection, MembersSection } from "./HouseholdSections.tsx";
 import { InviteSection } from "./InviteSection.tsx";
 import { PaymentMethodsSection } from "./PaymentMethodsSection.tsx";
@@ -33,6 +34,7 @@ const GROUPS: { title: string; items: Section[] }[] = [
     items: [
       { id: "payment-methods", label: "지출수단", icon: CreditCard, fill: true, render: () => <PaymentMethodsSection /> },
       { id: "categories", label: "분류", icon: Shapes, fill: true, render: () => <CategoriesSection /> },
+      { id: "fixed-expenses", label: "고정지출", icon: Repeat, fill: true, render: () => <FixedExpensesSection /> },
     ],
   },
   { title: "앱", items: [{ id: "app", label: "앱 정보와 업데이트", icon: Info, render: () => <AppSection /> }] },

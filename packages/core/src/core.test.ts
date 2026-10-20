@@ -18,6 +18,9 @@ import {
   nextBillingCycle,
   paymentMethodInputSchema,
   paymentMethodLabel,
+  dueRecurringMonths,
+  nextRecurringDate,
+  recurringStartMonth,
   type PaymentMethod,
   type Transaction,
 } from "./index.ts";
@@ -193,5 +196,30 @@ describe("카드 결제", () => {
     expect(allowsInstallment({ type: "card", cardKind: "check" })).toBe(false);
     expect(allowsInstallment({ type: "cash", cardKind: null })).toBe(false);
     expect(allowsInstallment({ type: "card", cardKind: "credit" })).toBe(true);
+  });
+});
+
+describe("고정지출", () => {
+  const base = { paymentDay: 25, startMonth: "2026-10", endMonth: null, lastGeneratedMonth: null, active: true } as const;
+  it("결제일이 지났으면 다음 달부터 시작한다", () => {
+    expect(recurringStartMonth(25, "2026-10-20")).toBe("2026-10");
+    expect(recurringStartMonth(20, "2026-10-20")).toBe("2026-10");
+    expect(recurringStartMonth(5, "2026-10-20")).toBe("2026-11");
+  });
+  it("결제일 당일부터 만들고 이미 만든 달은 건너뛴다", () => {
+    expect(dueRecurringMonths(base, "2026-10-24")).toEqual([]);
+    expect(dueRecurringMonths(base, "2026-10-25")).toEqual(["2026-10"]);
+    expect(dueRecurringMonths({ ...base, lastGeneratedMonth: "2026-10" }, "2026-11-30")).toEqual(["2026-11"]);
+  });
+  it("멈춘 동안 놓친 달을 채우고 종료월에서 멈춘다", () => {
+    expect(dueRecurringMonths(base, "2027-01-26")).toEqual(["2026-10", "2026-11", "2026-12", "2027-01"]);
+    expect(dueRecurringMonths({ ...base, endMonth: "2026-11" }, "2027-01-26")).toEqual(["2026-10", "2026-11"]);
+    expect(dueRecurringMonths({ ...base, active: false }, "2027-01-26")).toEqual([]);
+  });
+  it("말일 결제와 다음 생성일", () => {
+    const eom = { ...base, paymentDay: 31, startMonth: "2027-02" } as const;
+    expect(dueRecurringMonths(eom, "2027-02-28")).toEqual(["2027-02"]);
+    expect(nextRecurringDate(eom)).toBe("2027-02-28");
+    expect(nextRecurringDate({ ...base, lastGeneratedMonth: "2026-11", endMonth: "2026-11" })).toBeNull();
   });
 });

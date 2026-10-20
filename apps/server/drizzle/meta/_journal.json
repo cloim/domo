@@ -15,6 +15,13 @@
       "when": 1792471075586,
       "tag": "0001_card_details",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792481857525,
+      "tag": "0002_recurring_expenses",
+      "breakpoints": true
     }
   ]
 }

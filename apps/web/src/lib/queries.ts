@@ -30,6 +30,7 @@ export const keys = {
   household: ["household"] as const,
   transactions: (range: DateRange) => ["transactions", range.start, range.end] as const,
   invites: ["invites"] as const,
+  recurring: ["recurring"] as const,
 };
 
 export const useMe = (enabled: boolean) => useQuery({ queryKey: keys.me, queryFn: () => api<Me>("/api/me"), enabled, staleTime: 60_000 });

@@ -153,8 +153,8 @@ export function CategoriesSection() {
                   <button type="button" className="icon-btn" aria-label="대분류 아래로" title="아래로" disabled={parents.at(-1)?.id === selected.id} onClick={() => move(parents, parents.indexOf(selected), 1)}>
                     <ArrowDown size={17} aria-hidden="true" />
                   </button>
-                  <button type="button" className="icon-btn" aria-label={`${selected.name} 이름 수정`} title="이름 수정" onClick={() => setEditing({ id: selected.id, name: selected.name })}>
-                    <Pencil size={17} aria-hidden="true" />
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ id: selected.id, name: selected.name })}>
+                    <Pencil size={15} aria-hidden="true" /> 이름 수정
                   </button>
                   <button type="button" className="icon-btn danger" aria-label={`${selected.name} 삭제`} title="삭제" onClick={() => void onDelete(selected)}>
                     <Trash2 size={17} aria-hidden="true" />

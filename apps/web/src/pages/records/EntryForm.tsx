@@ -8,7 +8,7 @@ import {
   type TransactionInput,
   type TransactionKind,
 } from "@domo/core";
-import { Lock, Trash2 } from "lucide-react";
+import { Lock, Repeat, Trash2 } from "lucide-react";
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
@@ -174,6 +174,11 @@ export function EntryForm({ data, kind: initialKind, transaction, canEdit, sugge
           {!canEdit && (
             <div className="readonly-note">
               <Lock size={15} aria-hidden="true" /> {author?.displayName ?? "다른 구성원"}님이 작성한 기록이라 볼 수만 있어요.
+            </div>
+          )}
+          {transaction?.recurringId && canEdit && (
+            <div className="readonly-note">
+              <Repeat size={15} aria-hidden="true" /> 고정지출에서 자동으로 만든 기록이에요. 여기서 고치면 이 기록만 바뀝니다.
             </div>
           )}
           {!transaction && (

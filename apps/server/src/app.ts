@@ -8,6 +8,7 @@ import { HttpError } from "./http.ts";
 import { authRoutes, sessionKey } from "./routes/auth.ts";
 import { householdRoutes } from "./routes/household.ts";
 import { ledgerRoutes } from "./routes/ledger.ts";
+import { recurringRoutes } from "./routes/recurring.ts";
 
 const PUBLIC_API = new Set(["/api/health", "/api/auth/config", "/api/auth/google", "/api/auth/dev"]);
 
@@ -48,6 +49,7 @@ export async function buildApp({ db, config }: { db: Db; config: Config }) {
   await app.register(authRoutes, { db, config });
   await app.register(householdRoutes, { db, config });
   await app.register(ledgerRoutes, { db });
+  await app.register(recurringRoutes, { db });
 
   if (config.webDist && existsSync(config.webDist)) {
     await app.register(fastifyStatic, { root: config.webDist });

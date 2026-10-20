@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.ts";
 import { createDb, runMigrations } from "./db/client.ts";
+import { generateRecurring } from "./routes/recurring.ts";
 
 const { db, close } = createDb(process.env.TEST_DATABASE_URL ?? "postgres://domo:domo@localhost:5434/domo_test");
 let app: FastifyInstance;
@@ -106,6 +107,10 @@ describe("가계부 API", () => {
     const cash = base.paymentMethods[0];
     await owner("POST", "/api/transactions", { kind: "expense", paymentMethodId: cash.id, counterparty: "펫샵", memo: null, amount: 30000, installmentMonths: 1, categoryId: child.id, occurredAt: "2026-10-05T12:00" });
 
+    expect((await owner("PATCH", `/api/categories/${parent.id}`, { name: "반려동물, 식물" })).statusCode).toBe(200);
+    const renamed = (await owner("GET", "/api/household")).json().categories.find((c: { id: string }) => c.id === parent.id);
+    expect(renamed.name).toBe("반려동물, 식물");
+
     expect((await owner("DELETE", `/api/categories/${parent.id}`)).json()).toEqual({ archived: true });
     const after = (await owner("GET", "/api/household")).json();
     expect(after.categories.find((c: { id: string }) => c.id === child.id).archived).toBe(true);
@@ -134,6 +139,59 @@ describe("카드 지출수단", () => {
     const after = (await owner("GET", "/api/household")).json().paymentMethods.find((m: { id: string }) => m.id === created.id);
     expect(after).toMatchObject({ name: "아이 카드", holderMemberId: base.me.memberId, holderName: null, archived: true });
     expect((await owner("PUT", `/api/payment-methods/${created.id}`, cardInput({ holderMemberId: "6f1c2b9e-1d2a-4b7a-9c3d-2a1b3c4d5e6f" }))).statusCode).toBe(400);
+  });
+});
+
+describe("고정지출", () => {
+  it("결제일에 기록을 만들고 중복과 지운 달 재생성을 막는다", async () => {
+    const mom = await login("mom@test.com", "엄마");
+    const base = (await mom("GET", "/api/household")).json();
+    const sub = base.categories.find((c: { parentId: string | null; name: string }) => c.parentId && c.name === "통신비");
+    const cash = base.paymentMethods.find((m: { type: string }) => m.type === "cash");
+    const owner = base.members.find((m: { role: string }) => m.role === "owner");
+    const input = { counterparty: "KT", memo: "인터넷", amount: 33000, paymentDay: 31, memberId: owner.id, paymentMethodId: cash.id, categoryId: sub.id, endMonth: null, active: true };
+
+    const { id } = (await mom("POST", "/api/recurring", input)).json();
+    const [item] = (await mom("GET", "/api/recurring")).json();
+    expect(item).toMatchObject({ id, paymentDay: 31, active: true });
+    const start = item.startMonth as string;
+
+    // 시작월 다음 두 달의 결제일 이후로 시계를 옮겨 놓친 달을 채운다.
+    const [y, m] = start.split("-").map(Number) as [number, number];
+    const later = new Date(Date.UTC(y, m + 1, 28)).toISOString().slice(0, 10);
+    expect(await generateRecurring(db, later)).toBeGreaterThanOrEqual(2);
+    expect(await generateRecurring(db, later)).toBe(0);
+
+    const list = (await mom("GET", `/api/transactions?start=${start}-01&end=${later}`)).json().filter((t: { recurringId: string | null }) => t.recurringId === id);
+    expect(list.length).toBeGreaterThanOrEqual(2);
+    expect(list[0]).toMatchObject({ counterparty: "KT", amount: 33000, memberId: owner.id, installmentMonths: 1 });
+    expect(list.every((t: { occurredAt: string }) => t.occurredAt.endsWith("T00:00"))).toBe(true);
+
+    // 기록의 작성자는 지출자(대표자)라 구성원은 지울 수 없다. 대표자가 지워도 그 달을 다시 만들지 않는다.
+    expect((await mom("DELETE", `/api/transactions/${list[0].id}`)).statusCode).toBe(403);
+    const ownerApi = await login("dad@test.com", "아빠");
+    expect((await ownerApi("DELETE", `/api/transactions/${list[0].id}`)).statusCode).toBe(200);
+    expect(await generateRecurring(db, later)).toBe(0);
+
+    // 쓰인 지출수단은 지우지 않고 보관하고, 고정지출을 지우면 기록은 남는다.
+    expect((await mom("DELETE", `/api/recurring/${id}`)).statusCode).toBe(200);
+    const remain = (await mom("GET", `/api/transactions?start=${start}-01&end=${later}`)).json().filter((t: { counterparty: string }) => t.counterparty === "KT");
+    expect(remain.length).toBe(list.length - 1);
+    expect(remain.every((t: { recurringId: string | null }) => t.recurringId === null)).toBe(true);
+  });
+
+  it("종료월과 사용 여부를 지킨다", async () => {
+    const owner = await login("dad@test.com", "아빠");
+    const base = (await owner("GET", "/api/household")).json();
+    const sub = base.categories.find((c: { parentId: string | null; name: string }) => c.parentId && c.name === "보험");
+    const cash = base.paymentMethods.find((m: { type: string }) => m.type === "cash");
+    const input = { counterparty: "보험사", memo: null, amount: 50000, paymentDay: 1, memberId: base.me.memberId, paymentMethodId: cash.id, categoryId: sub.id, endMonth: null, active: false };
+    const { id } = (await owner("POST", "/api/recurring", input)).json();
+    expect(await generateRecurring(db, "2099-12-31")).toBe(0);
+    const [item] = (await owner("GET", "/api/recurring")).json().filter((r: { id: string }) => r.id === id);
+    await owner("PUT", `/api/recurring/${id}`, { ...input, active: true, endMonth: item.startMonth });
+    expect(await generateRecurring(db, "2099-12-31")).toBe(1);
+    expect((await owner("POST", "/api/recurring", { ...input, categoryId: base.categories.find((c: { parentId: string | null }) => !c.parentId).id })).statusCode).toBe(400);
   });
 });
 

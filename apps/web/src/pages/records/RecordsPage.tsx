@@ -196,7 +196,10 @@ function EntryRow({ entry, data, current, flash, onOpen }: { entry: LedgerEntry;
     <button type="button" className={`entry${flash ? " entry-flash" : ""}`} aria-current={current} onClick={onOpen}>
       {member && <span className="dot" style={{ background: member.color }} title={member.displayName} aria-label={member.displayName} />}
       <span className="entry-main">
-        <span className="entry-title">{t.counterparty}</span>
+        <span className="entry-title">
+          {t.counterparty}
+          {t.recurringId && <span className="badge" style={{ marginLeft: 6, verticalAlign: 2 }}>고정</span>}
+        </span>
         <span className="entry-meta">
           {t.memo ? <span className="entry-memo">{t.memo}</span> : <span>{category?.name ?? "미분류"}</span>}
           <span className="sep" aria-hidden="true" />

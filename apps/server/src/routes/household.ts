@@ -4,7 +4,7 @@ import { and, asc, count, eq, gt, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Config } from "../config.ts";
 import type { Db } from "../db/client.ts";
-import { categories, householdMembers, households, invites, paymentMethods, transactions, users } from "../db/schema.ts";
+import { categories, householdMembers, households, invites, paymentMethods, recurringExpenses, transactions, users } from "../db/schema.ts";
 import { HttpError, parse, requireMember, requireOwner, userIdOf } from "../http.ts";
 
 const INVITE_DAYS = 7;
@@ -105,6 +105,8 @@ export async function householdRoutes(app: FastifyInstance, { db, config }: { db
     const [used] = await db.select({ n: count() }).from(transactions).where(eq(transactions.memberId, target.id));
     // 작성자 정보를 보존하기 위해 기록이 있는 구성원은 내보내지 않는다.
     if (used!.n > 0) throw new HttpError(409, "기록이 있는 구성원은 내보낼 수 없습니다.");
+    const [fixed] = await db.select({ n: count() }).from(recurringExpenses).where(eq(recurringExpenses.memberId, target.id));
+    if (fixed!.n > 0) throw new HttpError(409, "이 구성원이 지출자인 고정지출을 먼저 바꾸거나 지워 주세요.");
     await db.delete(householdMembers).where(eq(householdMembers.id, target.id));
     return { ok: true };
   });

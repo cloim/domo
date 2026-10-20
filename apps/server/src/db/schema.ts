@@ -78,6 +78,26 @@ export const categories = pgTable("categories", {
   createdAt: createdAt(),
 });
 
+/** 매월 결제일에 지출 기록을 만드는 고정지출 */
+export const recurringExpenses = pgTable("recurring_expenses", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+  /** 지출자. 생성되는 기록의 작성자가 된다. */
+  memberId: uuid("member_id").notNull().references(() => householdMembers.id),
+  paymentMethodId: uuid("payment_method_id").notNull().references(() => paymentMethods.id),
+  counterparty: text("counterparty").notNull(),
+  memo: text("memo"),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  categoryId: uuid("category_id").notNull().references(() => categories.id),
+  /** 1~31, 31은 말일 */
+  paymentDay: integer("payment_day").notNull(),
+  startMonth: text("start_month").notNull(),
+  endMonth: text("end_month"),
+  lastGeneratedMonth: text("last_generated_month"),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
 export const transactions = pgTable(
   "transactions",
   {
@@ -93,6 +113,7 @@ export const transactions = pgTable(
     categoryId: uuid("category_id").notNull().references(() => categories.id),
     /** 가족이 사는 지역의 벽시계 시각 */
     occurredAt: timestamp("occurred_at", { mode: "string" }).notNull(),
+    recurringId: uuid("recurring_id").references((): AnyPgColumn => recurringExpenses.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => sql`now()`),
   },

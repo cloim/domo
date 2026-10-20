@@ -13,7 +13,7 @@ import { and, count, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/client.ts";
-import { categories, householdMembers, paymentMethods, transactions } from "../db/schema.ts";
+import { categories, householdMembers, paymentMethods, recurringExpenses, transactions } from "../db/schema.ts";
 import { HttpError, parse, requireMember, type MemberRow } from "../http.ts";
 
 const rangeSchema = z.object({ start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
@@ -30,6 +30,7 @@ const toDto = (t: typeof transactions.$inferSelect) => ({
   categoryId: t.categoryId,
   // DB 문자열 "2026-10-20 09:30:00" 을 화면 형식으로 맞춘다.
   occurredAt: t.occurredAt.slice(0, 16).replace(" ", "T"),
+  recurringId: t.recurringId,
 });
 
 export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
@@ -150,7 +151,8 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
     if (!target) throw new HttpError(404, "지출수단을 찾을 수 없습니다.");
     if (!target.archivedAt && (await activeMethodCount(me.householdId)) <= 1) throw new HttpError(400, "사용 중인 지출수단이 최소 하나는 있어야 합니다.");
     const [used] = await db.select({ n: count() }).from(transactions).where(eq(transactions.paymentMethodId, req.params.id));
-    if (used!.n > 0) {
+    const [fixed] = await db.select({ n: count() }).from(recurringExpenses).where(eq(recurringExpenses.paymentMethodId, req.params.id));
+    if (used!.n + fixed!.n > 0) {
       await db.update(paymentMethods).set({ archivedAt: new Date() }).where(where);
       return { archived: true };
     }
@@ -200,8 +202,9 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
       // 자식부터 지워야 parent_id 참조가 끊기지 않는다.
       for (const id of [...ids].reverse()) {
         const [used] = await tx.select({ n: count() }).from(transactions).where(eq(transactions.categoryId, id));
+        const [fixed] = await tx.select({ n: count() }).from(recurringExpenses).where(eq(recurringExpenses.categoryId, id));
         const [children] = await tx.select({ n: count() }).from(categories).where(eq(categories.parentId, id));
-        if (used!.n > 0 || children!.n > 0) {
+        if (used!.n > 0 || fixed!.n > 0 || children!.n > 0) {
           await tx.update(categories).set({ archivedAt: new Date() }).where(eq(categories.id, id));
           archived = true;
         } else {

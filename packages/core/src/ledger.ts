@@ -12,6 +12,8 @@ export interface Transaction {
   installmentMonths: number;
   categoryId: string;
   occurredAt: string;
+  /** 고정지출에서 자동 생성된 기록이면 그 고정지출 id */
+  recurringId?: string | null;
 }
 
 export interface Member {
