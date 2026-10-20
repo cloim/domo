@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useDialog } from "../../components/Dialogs.tsx";
 import { fetchAuthConfig, loadGoogleIdentity, loginDev, loginWithIdToken, nativeGoogleLogin } from "../../lib/auth.ts";
+import logoUrl from "../../assets/logo.svg";
 
 export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
   const dialog = useDialog();
@@ -49,7 +50,7 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
     <main className="gate">
       <div className="gate-card">
         <div className="gate-brand">
-          <img src="/favicon.svg" alt="" />
+          <img src={logoUrl} alt="" />
           도모
         </div>
         <h1>

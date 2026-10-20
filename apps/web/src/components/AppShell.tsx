@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { signOut } from "../lib/auth.ts";
 import { useHousehold, type Me } from "../lib/queries.ts";
+import logoUrl from "../assets/logo.svg";
 
 const NAV = [
   { to: "/records", label: "입출기록", icon: NotebookPen },
@@ -15,7 +16,7 @@ export function AppShell({ me }: { me: Me }) {
     <div className="shell">
       <aside className="sidebar">
         <Link to="/records" className="brand" aria-label="도모 홈">
-          <img src="/favicon.svg" alt="" className="brand-mark" />
+          <img src={logoUrl} alt="" className="brand-mark" />
           도모
         </Link>
         <nav className="side-nav" aria-label="주요 메뉴">

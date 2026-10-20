@@ -8,6 +8,7 @@ import { OnboardingPage } from "./pages/gate/OnboardingPage.tsx";
 import { pendingInvite } from "./pages/gate/pendingInvite.ts";
 import { RecordsPage } from "./pages/records/RecordsPage.tsx";
 import { SettingsPage } from "./pages/settings/SettingsPage.tsx";
+import logoUrl from "./assets/logo.svg";
 
 // 차트 라이브러리는 통계 화면에서만 쓰므로 따로 불러온다.
 const StatsPage = lazy(() => import("./pages/stats/StatsPage.tsx").then((m) => ({ default: m.StatsPage })));
@@ -91,7 +92,7 @@ function SignedIn() {
 function Splash() {
   return (
     <main className="gate" aria-busy="true">
-      <img src="/favicon.svg" alt="도모" width={56} height={56} style={{ borderRadius: 16, opacity: 0.9 }} />
+      <img src={logoUrl} alt="도모" width={56} height={56} style={{ opacity: 0.9 }} />
     </main>
   );
 }
