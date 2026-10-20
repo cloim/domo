@@ -210,41 +210,46 @@ export function EntryForm({ data, kind: initialKind, transaction, canEdit, sugge
           </div>
 
           {kind === "expense" && (
-            <div className="field">
-              <span className="field-label">지출수단</span>
-              <div className="chips" role="group" aria-label="지출수단">
-                {activeMethods.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className="chip"
-                    aria-pressed={paymentMethodId === m.id}
-                    onClick={() => {
-                      setPaymentMethodId(m.id);
-                      if (m.type === "cash") setInstallmentMonths(1);
-                    }}
-                  >
-                    {m.name}
-                  </button>
-                ))}
-              </div>
-              {errors.paymentMethodId && <span className="field-error">{errors.paymentMethodId}</span>}
-            </div>
-          )}
-
-          {isCard && (
-            <div className="field">
-              <label className="field-label" htmlFor="installment">
-                할부
-              </label>
-              <SelectControl id="installment" value={installmentMonths} onChange={(e) => setInstallmentMonths(Number(e.target.value))}>
-                <option value={1}>일시불</option>
-                {Array.from({ length: MAX_INSTALLMENT_MONTHS - 1 }, (_, i) => i + 2).map((n) => (
-                  <option key={n} value={n}>
-                    {n}개월
+            <div className="form-row">
+              <div className="field">
+                <label className="field-label" htmlFor="paymentMethod">
+                  지출수단
+                </label>
+                <SelectControl
+                  id="paymentMethod"
+                  className={paymentMethodId ? "" : "is-placeholder"}
+                  value={paymentMethodId ?? ""}
+                  aria-invalid={!!errors.paymentMethodId}
+                  onChange={(e) => {
+                    setPaymentMethodId(e.target.value);
+                    if (activeMethods.find((m) => m.id === e.target.value)?.type === "cash") setInstallmentMonths(1);
+                  }}
+                >
+                  <option value="" disabled>
+                    선택
                   </option>
-                ))}
-              </SelectControl>
+                  {activeMethods.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </SelectControl>
+                {errors.paymentMethodId && <span className="field-error">{errors.paymentMethodId}</span>}
+              </div>
+              {/* 현금이어도 자리를 지켜 수단을 바꿀 때 폼이 흔들리지 않게 한다. */}
+              <div className="field">
+                <label className="field-label" htmlFor="installment">
+                  할부
+                </label>
+                <SelectControl id="installment" value={isCard ? installmentMonths : 1} disabled={!isCard} onChange={(e) => setInstallmentMonths(Number(e.target.value))}>
+                  <option value={1}>일시불</option>
+                  {Array.from({ length: MAX_INSTALLMENT_MONTHS - 1 }, (_, i) => i + 2).map((n) => (
+                    <option key={n} value={n}>
+                      {n}개월
+                    </option>
+                  ))}
+                </SelectControl>
+              </div>
             </div>
           )}
 
@@ -282,22 +287,28 @@ export function EntryForm({ data, kind: initialKind, transaction, canEdit, sugge
 
           <div className="field">
             <span className="field-label">분류</span>
-            <div className="chips" role="group" aria-label="대분류">
-              {parents.map((c) => (
-                <button key={c.id} type="button" className="chip" aria-pressed={parentId === c.id} onClick={() => pickParent(c.id)}>
-                  {c.name}
-                </button>
-              ))}
-            </div>
-            {parentId && children.length > 0 && (
-              <div className="chips" role="group" aria-label="소분류" style={{ marginTop: 4 }}>
-                {children.map((c) => (
-                  <button key={c.id} type="button" className="chip chip-sub" aria-pressed={categoryId === c.id} onClick={() => setCategoryId(c.id)}>
+            <div className="form-row">
+              <SelectControl aria-label="대분류" className={parentId ? "" : "is-placeholder"} value={parentId ?? ""} aria-invalid={!!errors.categoryId && !parentId} onChange={(e) => pickParent(e.target.value)}>
+                <option value="" disabled>
+                  대분류
+                </option>
+                {parents.map((c) => (
+                  <option key={c.id} value={c.id}>
                     {c.name}
-                  </button>
+                  </option>
                 ))}
-              </div>
-            )}
+              </SelectControl>
+              <SelectControl aria-label="소분류" className={categoryId ? "" : "is-placeholder"} value={categoryId ?? ""} aria-invalid={!!errors.categoryId && !!parentId} disabled={!parentId} onChange={(e) => setCategoryId(e.target.value)}>
+                <option value="" disabled>
+                  소분류
+                </option>
+                {children.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </SelectControl>
+            </div>
             {errors.categoryId && <span className="field-error">{errors.categoryId}</span>}
           </div>
 
