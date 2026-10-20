@@ -436,10 +436,6 @@ textarea.input { height: auto; min-height: 72px; padding: 10px 12px; resize: ver
 @media (max-width: 600px) {
   .stats-basis-suffix { display: none; }
 }
-@media (max-width: 400px) {
-  .stats-tab-controls { gap: 6px; }
-  .stats-tab-controls .segmented button { padding-inline: 4px; font-size: 13px; }
-}
 .stats-controls .period { display: flex; align-items: center; gap: 4px; }
 .stats-controls .period-label { min-width: 120px; font-family: var(--font-display); font-size: 18px; font-weight: 700; text-align: center; }
 .range-inputs { display: flex; align-items: center; gap: 6px; }
