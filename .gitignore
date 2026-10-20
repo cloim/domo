@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.worktrees/
+.env
+*.log
+apps/web/android/app/build/
+apps/web/android/.gradle/
+apps/web/android/local.properties
+apps/web/android/app/src/main/assets/public/
+release/
+docs/
+%programdata%/

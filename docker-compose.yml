@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: domo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: domo
+      POSTGRES_PASSWORD: ${DOMO_DB_PASSWORD:-domo}
+      POSTGRES_DB: domo
+      TZ: Asia/Seoul
+    ports:
+      - "5434:5432"
+    volumes:
+      - domo-pg:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+volumes:
+  domo-pg:
