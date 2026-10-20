@@ -16,7 +16,7 @@
   display: flex;
   position: relative;
   max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   flex-direction: column;
   border-radius: 12px;
   background: var(--surface);
@@ -130,7 +130,7 @@ body.modal-gesture-active {
 /* 좁은 화면에서는 드래그와 리사이즈가 꺼지고, 모달이 화면을 거의 채운다. */
 @media (max-width: 767px) {
   .modal-overlay {
-    padding: 12px;
+    padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
   }
 
   /* 좁은 화면에서는 저장된 위치와 크기가 남아 있어도 전체 폭 배치를 유지한다. 훅이 넣는
@@ -138,6 +138,8 @@ body.modal-gesture-active {
   .modal-panel {
     width: 100% !important;
     max-width: 100%;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    min-height: 0;
     height: auto !important;
     transform: none !important;
   }

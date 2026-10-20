@@ -9,11 +9,12 @@ import {
   type PaymentMethod,
   type PaymentMethodInput,
 } from "@domo/core";
-import { ArrowDown, ArrowUp, Banknote, ChevronLeft, CreditCard, Plus, Search, Trash2 } from "lucide-react";
+import { Banknote, ChevronLeft, CreditCard, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
+import { SortableList } from "../../components/SortableList.tsx";
 import { api } from "../../lib/api.ts";
 import { dayLabel, dayOptionLabel, formatShortDate, formatWon } from "../../lib/format.ts";
 import { useHousehold, useHouseholdMutation, type HouseholdData } from "../../lib/queries.ts";
@@ -31,6 +32,8 @@ const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 export function PaymentMethodsSection() {
   const { data } = useHousehold();
+  const dialog = useDialog();
+  const reorder = useHouseholdMutation((ids: string[]) => api("/api/payment-methods/order", { method: "PUT", body: { ids } }));
   const { bills } = useCardBills();
   const [params, setParams] = useSearchParams();
   const twoPane = useMedia(MD_TWO_PANE);
@@ -63,9 +66,9 @@ export function PaymentMethodsSection() {
           </div>
         </div>
         <div className="md-list-body">
-          {active.map((m) => (
-            <MethodItem key={m.id} method={m} bill={bills.get(m.id)} current={m.id === selectedId} onSelect={() => select(m.id)} />
-          ))}
+          <SortableList items={active} disabled={!!q || reorder.isPending}
+            onReorder={(ids) => reorder.mutate(ids, { onError: (err) => void dialog.alert("순서를 바꾸지 못했습니다", err.message) })}
+            renderItem={(m) => <MethodItem method={m} bill={bills.get(m.id)} current={m.id === selectedId} onSelect={() => select(m.id)} />} />
           {inactive.length > 0 && <div className="md-group">사용 안 함</div>}
           {inactive.map((m) => (
             <MethodItem key={m.id} method={m} current={m.id === selectedId} onSelect={() => select(m.id)} />
@@ -189,21 +192,10 @@ function MethodEditor({ data, method, bill, onBack, onSaved }: EditorProps) {
     method ? (await api(`/api/payment-methods/${method.id}`, { method: "PUT", body: input }), method.id) : (await api<{ id: string }>("/api/payment-methods", { method: "POST", body: input })).id,
   );
   const remove = useHouseholdMutation((id: string) => api<{ archived: boolean }>(`/api/payment-methods/${id}`, { method: "DELETE" }));
-  const reorder = useHouseholdMutation((ids: string[]) => api("/api/payment-methods/order", { method: "PUT", body: { ids } }));
-
   const isCard = draft.type === "card";
   const autoName = paymentMethodLabel({ name: "", issuer: draft.issuer, last4: draft.last4 });
   const today = nowLocalDateTime().slice(0, 10);
   const preview = useMemo(() => (draft.billing ? nextBillingCycle(draft, today) : null), [draft, today]);
-
-  const ordered = data.paymentMethods.filter((m) => !m.archived);
-  const index = method ? ordered.findIndex((m) => m.id === method.id) : -1;
-  function move(delta: number) {
-    const ids = ordered.map((m) => m.id);
-    const [moved] = ids.splice(index, 1);
-    ids.splice(index + delta, 0, moved!);
-    reorder.mutate(ids, { onError: (err) => void dialog.alert("순서를 바꾸지 못했습니다", err.message) });
-  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -249,16 +241,6 @@ function MethodEditor({ data, method, bill, onBack, onSaved }: EditorProps) {
           <ChevronLeft size={20} aria-hidden="true" />
         </button>
         <h2>{method ? method.name : "새 카드"}</h2>
-        {method && !method.archived && (
-          <>
-            <button type="button" className="icon-btn" aria-label="위로" title="위로" disabled={index <= 0} onClick={() => move(-1)}>
-              <ArrowUp size={17} aria-hidden="true" />
-            </button>
-            <button type="button" className="icon-btn" aria-label="아래로" title="아래로" disabled={index < 0 || index >= ordered.length - 1} onClick={() => move(1)}>
-              <ArrowDown size={17} aria-hidden="true" />
-            </button>
-          </>
-        )}
       </div>
 
       <div className="md-detail-body">

@@ -289,10 +289,12 @@ function TargetDetail({ source, target, icon, onBack, onUpdate, onRemove }: Deta
                   ) : (
                     <button
                       type="button"
-                      className="btn btn-ghost btn-sm"
+                      className="icon-btn notify-template-action"
+                      aria-label={`${n.title || "알림"} 템플릿 만들기`}
+                      title="템플릿 만들기"
                       onClick={() => navigate(`/settings/notify-templates?id=new&from=${n.id}&app=${encodeURIComponent(n.packageName)}`)}
                     >
-                      <Wand2 size={15} aria-hidden="true" /> 템플릿 만들기
+                      <Wand2 size={17} aria-hidden="true" />
                     </button>
                   )}
                 </li>

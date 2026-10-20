@@ -144,7 +144,6 @@ export function RecordsPage() {
                   {txs.isPending || !data ? <span className="skeleton" style={{ height: 28, width: "100%" }} /> : <>
                     <span>실지출 <strong className="num">{formatWon(totals.realExpense)}원</strong></span>
                     <span>월 잔액 <strong className="num">{formatWon(totals.balance)}원</strong></span>
-                    <small>지출은 사용 기준, 실지출은 출금일 기준이에요. 월 잔액 = 수입 − 실지출</small>
                   </>}
                 </div>
               </div>

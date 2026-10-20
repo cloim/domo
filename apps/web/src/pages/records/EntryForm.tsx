@@ -9,7 +9,7 @@ import {
   type TransactionKind,
 } from "@domo/core";
 import { Lock, Repeat, Trash2 } from "lucide-react";
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
 import { formatWon } from "../../lib/format.ts";
@@ -52,6 +52,9 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
   const save = useSaveTransaction();
   const remove = useDeleteTransaction();
   const listId = useId();
+  const counterpartyRef = useRef<HTMLInputElement>(null);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestionIndex, setSuggestionIndex] = useState(-1);
   const numericMode = useNumericInputMode();
 
   const activeMethods = data.paymentMethods.filter((m) => !m.archived || m.id === transaction?.paymentMethodId);
@@ -137,6 +140,14 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
     [isCard, installmentMonths, amountNumber],
   );
   const kindSuggestions = suggestions.filter((s) => (kind === "expense" ? s.paymentMethodId : !s.paymentMethodId));
+  const matchingSuggestions = kindSuggestions.filter((s) => s.counterparty.toLocaleLowerCase().includes(counterparty.trim().toLocaleLowerCase()));
+  const showSuggestions = suggestionsOpen && matchingSuggestions.length > 0;
+
+  useEffect(() => {
+    if (showSuggestions && suggestionIndex >= 0) {
+      document.getElementById(`${listId}-${suggestionIndex}`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [showSuggestions, suggestionIndex, listId]);
 
   function switchKind(next: TransactionKind) {
     setKind(next);
@@ -160,6 +171,13 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
       setParentId(parentOf(hit.categoryId));
       setCategoryId(hit.categoryId);
     }
+  }
+
+  function pickSuggestion(value: string) {
+    onCounterparty(value);
+    counterpartyRef.current?.focus();
+    setSuggestionsOpen(false);
+    setSuggestionIndex(-1);
   }
 
   async function submit(e: FormEvent) {
@@ -310,22 +328,52 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
             <label className="field-label" htmlFor="counterparty">
               {label}처
             </label>
-            <input
-              id="counterparty"
-              className="input"
-              list={listId}
-              autoComplete="off"
-              maxLength={60}
-              placeholder={kind === "expense" ? "예: 동네마트" : "예: 회사"}
-              aria-invalid={!!errors.counterparty}
-              value={counterparty}
-              onChange={(e) => onCounterparty(e.target.value)}
-            />
-            <datalist id={listId}>
-              {kindSuggestions.map((s) => (
-                <option key={s.counterparty} value={s.counterparty} />
-              ))}
-            </datalist>
+            <div className="counterparty-control" onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSuggestionsOpen(false);
+            }}>
+              <input
+                id="counterparty"
+                ref={counterpartyRef}
+                className="input"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={showSuggestions}
+                aria-controls={showSuggestions ? listId : undefined}
+                aria-activedescendant={showSuggestions && suggestionIndex >= 0 ? `${listId}-${suggestionIndex}` : undefined}
+                autoComplete="off"
+                maxLength={60}
+                placeholder={kind === "expense" ? "예: 동네마트" : "예: 회사"}
+                aria-invalid={!!errors.counterparty}
+                value={counterparty}
+                onFocus={() => { setSuggestionsOpen(true); setSuggestionIndex(-1); }}
+                onChange={(e) => { onCounterparty(e.target.value); setSuggestionsOpen(true); setSuggestionIndex(-1); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && suggestionsOpen) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSuggestionsOpen(false);
+                  } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSuggestionsOpen(true);
+                    setSuggestionIndex((i) => Math.max(0, Math.min(matchingSuggestions.length - 1, i + (e.key === "ArrowDown" ? 1 : -1))));
+                  } else if (e.key === "Enter" && showSuggestions && matchingSuggestions[suggestionIndex]) {
+                    e.preventDefault();
+                    pickSuggestion(matchingSuggestions[suggestionIndex]!.counterparty);
+                  }
+                }}
+              />
+              {showSuggestions && (
+                <ul id={listId} role="listbox" aria-label={`${label}처 추천`} className="counterparty-suggestions">
+                  {matchingSuggestions.map((s, i) => (
+                    <li key={s.counterparty} id={`${listId}-${i}`} role="option" aria-selected={i === suggestionIndex}>
+                      <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={() => pickSuggestion(s.counterparty)}>
+                        {s.counterparty}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             {errors.counterparty && <span className="field-error">{errors.counterparty}</span>}
           </div>
 

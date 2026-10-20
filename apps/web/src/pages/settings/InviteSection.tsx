@@ -28,7 +28,7 @@ export function InviteSection() {
   return (
     <section>
       <div className="section-head">
-        <h2>초대 QR</h2>
+        <h2>구성원 초대</h2>
         <button
           type="button"
           className="btn btn-primary btn-sm"

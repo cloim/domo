@@ -1,8 +1,9 @@
 import type { Category, TransactionKind } from "@domo/core";
-import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { useDialog } from "../../components/Dialogs.tsx";
+import { SortableList } from "../../components/SortableList.tsx";
 import { api } from "../../lib/api.ts";
 import { useHousehold, useHouseholdMutation } from "../../lib/queries.ts";
 import { MD_TWO_PANE, useMedia } from "../../lib/useMedia.ts";
@@ -54,13 +55,6 @@ export function CategoriesSection() {
     setEditing(null);
   };
 
-  function move(list: Category[], index: number, delta: number) {
-    const ids = list.map((c) => c.id);
-    const [moved] = ids.splice(index, 1);
-    ids.splice(index + delta, 0, moved!);
-    reorder.mutate(ids, { onError: fail("순서를 바꾸지 못했습니다") });
-  }
-
   async function onDelete(c: Category) {
     const isParent = !c.parentId;
     const ok = await dialog.confirm({
@@ -108,7 +102,9 @@ export function CategoriesSection() {
           </div>
         </div>
         <div className="md-list-body">
-          {visibleParents.map((p) => (
+          <SortableList items={visibleParents} disabled={!!q || reorder.isPending || !!editing}
+            onReorder={(ids) => reorder.mutate(ids, { onError: fail("순서를 바꾸지 못했습니다") })}
+            renderItem={(p) => (
             <button key={p.id} type="button" className="md-item" aria-current={p.id === selectedId} onClick={() => update({ parent: p.id })}>
               <span className="md-item-main">
                 <strong>{p.name}</strong>
@@ -116,7 +112,7 @@ export function CategoriesSection() {
               <span className="md-item-end num">{childrenOf(p.id).length}</span>
               <ChevronRight size={16} aria-hidden="true" style={{ color: "var(--ink-3)" }} />
             </button>
-          ))}
+          )} />
           {visibleParents.length === 0 && <p className="hint" style={{ padding: "12px 10px" }}>{q ? "검색 결과가 없어요." : "대분류를 추가해 주세요."}</p>}
         </div>
         <form
@@ -146,14 +142,8 @@ export function CategoriesSection() {
               ) : (
                 <>
                   <h2>{selected.name}</h2>
-                  <button type="button" className="icon-btn" aria-label="대분류 위로" title="위로" disabled={parents[0]?.id === selected.id} onClick={() => move(parents, parents.indexOf(selected), -1)}>
-                    <ArrowUp size={17} aria-hidden="true" />
-                  </button>
-                  <button type="button" className="icon-btn" aria-label="대분류 아래로" title="아래로" disabled={parents.at(-1)?.id === selected.id} onClick={() => move(parents, parents.indexOf(selected), 1)}>
-                    <ArrowDown size={17} aria-hidden="true" />
-                  </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ id: selected.id, name: selected.name })}>
-                    <Pencil size={15} aria-hidden="true" /> 이름 수정
+                  <button type="button" className="icon-btn" aria-label={`${selected.name} 이름 수정`} title="이름 수정" onClick={() => setEditing({ id: selected.id, name: selected.name })}>
+                    <Pencil size={17} aria-hidden="true" />
                   </button>
                   <button type="button" className="icon-btn danger" aria-label={`${selected.name} 삭제`} title="삭제" onClick={() => void onDelete(selected)}>
                     <Trash2 size={17} aria-hidden="true" />
@@ -177,11 +167,11 @@ export function CategoriesSection() {
               {visibleChildren.length === 0 ? (
                 <p className="hint">{q ? "검색어와 맞는 소분류가 없어요." : "소분류가 없어요. 기록에는 소분류를 골라야 하니 하나 이상 추가해 주세요."}</p>
               ) : (
-                <ul className="list">
-                  {visibleChildren.map((c) => {
-                    const i = children.indexOf(c);
+                <SortableList items={visibleChildren} className="list" disabled={!!q || reorder.isPending || !!editing}
+                  onReorder={(ids) => reorder.mutate(ids, { onError: fail("순서를 바꾸지 못했습니다") })}
+                  renderItem={(c) => {
                     return (
-                      <li key={c.id}>
+                      <div className="sortable-content">
                         {editing?.id === c.id ? (
                           renameForm
                         ) : (
@@ -190,12 +180,6 @@ export function CategoriesSection() {
                               <strong style={{ fontWeight: 500 }}>{c.name}</strong>
                             </span>
                             <span className="list-actions">
-                              <button type="button" className="icon-btn" aria-label={`${c.name} 위로`} title="위로" disabled={i === 0} onClick={() => move(children, i, -1)}>
-                                <ArrowUp size={17} aria-hidden="true" />
-                              </button>
-                              <button type="button" className="icon-btn" aria-label={`${c.name} 아래로`} title="아래로" disabled={i === children.length - 1} onClick={() => move(children, i, 1)}>
-                                <ArrowDown size={17} aria-hidden="true" />
-                              </button>
                               <button type="button" className="icon-btn" aria-label={`${c.name} 이름 수정`} title="이름 수정" onClick={() => setEditing({ id: c.id, name: c.name })}>
                                 <Pencil size={17} aria-hidden="true" />
                               </button>
@@ -205,10 +189,9 @@ export function CategoriesSection() {
                             </span>
                           </>
                         )}
-                      </li>
+                      </div>
                     );
-                  })}
-                </ul>
+                  }} />
               )}
             </div>
           </>

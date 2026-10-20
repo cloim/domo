@@ -1,5 +1,5 @@
-import { BellRing, Bot, ChevronRight, CreditCard, House, Info, QrCode, Repeat, Shapes, Users, Wand2 } from "lucide-react";
-import { NavLink, useOutletContext, useParams } from "react-router";
+import { BellRing, Bot, ChevronRight, CreditCard, House, Info, Repeat, Shapes, Wand2 } from "lucide-react";
+import { Navigate, NavLink, useOutletContext, useParams } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
 import { useHousehold, type Me } from "../../lib/queries.ts";
 import { useMedia } from "../../lib/useMedia.ts";
@@ -30,9 +30,7 @@ const GROUPS: { title: string; items: Section[] }[] = [
   {
     title: "가계",
     items: [
-      { id: "household", label: "가계 정보", icon: House, render: () => <HouseholdSection /> },
-      { id: "members", label: "구성원", icon: Users, render: () => <MembersSection /> },
-      { id: "invite", label: "구성원 초대", icon: QrCode, ownerOnly: true, render: () => <InviteSection /> },
+      { id: "household", label: "가계와 구성원", icon: House, render: () => <HouseholdSettings /> },
     ],
   },
   {
@@ -68,6 +66,8 @@ export function SettingsPage() {
   // 넓은 화면에서는 /settings 에서도 첫 항목 내용을 함께 보여준다.
   const active = sections.find((s) => s.id === (section ?? DEFAULT_SECTION));
 
+  if (section === "members" || section === "invite") return <Navigate to="/settings/household" replace />;
+
   return (
     <>
       <TopBar title={section && active ? active.label : "설정"} parent={section && active ? { to: "/settings", label: "설정" } : undefined} me={me} />
@@ -101,6 +101,15 @@ export function SettingsPage() {
       </div>
     </>
   );
+}
+
+function HouseholdSettings() {
+  const { data } = useHousehold();
+  return <>
+    <HouseholdSection />
+    <MembersSection />
+    {data?.me.role === "owner" && <InviteSection />}
+  </>;
 }
 
 function SettingsSkeleton() {

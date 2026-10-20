@@ -140,7 +140,7 @@ export function StatsPage() {
                   <CategoryPanel stats={stats} />
                   <TimelinePanel stats={stats} />
                   <BarPanel title="구성원별" slices={stats.byMember} useOwnColor />
-                  {kind === "expense" && <BarPanel title="지출수단별" slices={stats.byPaymentMethod} />}
+                  {kind === "expense" && <BarPanel title="지출수단별" slices={stats.byPaymentMethod} showAmounts />}
                   {kind === "expense" && <CardBillsPanel />}
                 </div>
               )}
@@ -250,7 +250,7 @@ function TimelinePanel({ stats }: { stats: PeriodStats }) {
   );
 }
 
-function BarPanel({ title, slices, useOwnColor }: { title: string; slices: StatSlice[]; useOwnColor?: boolean }) {
+function BarPanel({ title, slices, useOwnColor, showAmounts = false }: { title: string; slices: StatSlice[]; useOwnColor?: boolean; showAmounts?: boolean }) {
   const base = baseOptions();
   const options: ChartOptions<"bar"> = {
     ...base,
@@ -278,7 +278,7 @@ function BarPanel({ title, slices, useOwnColor }: { title: string; slices: StatS
           aria-label={`${title} 금액 막대 차트`}
         />
       </div>
-      <table className="sr-only">
+      <table className={showAmounts ? "stat-amounts" : "sr-only"}>
         <caption>{title}</caption>
         <tbody>
           {slices.map((s) => (
