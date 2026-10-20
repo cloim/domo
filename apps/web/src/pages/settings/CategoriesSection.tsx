@@ -5,15 +5,14 @@ import { useSearchParams } from "react-router";
 import { useDialog } from "../../components/Dialogs.tsx";
 import { api } from "../../lib/api.ts";
 import { useHousehold, useHouseholdMutation } from "../../lib/queries.ts";
-import { useMedia } from "../../lib/useMedia.ts";
+import { MD_TWO_PANE, useMedia } from "../../lib/useMedia.ts";
 
-const TWO_PANE = "(min-width: 1280px)";
 
 export function CategoriesSection() {
   const { data } = useHousehold();
   const dialog = useDialog();
   const [params, setParams] = useSearchParams();
-  const twoPane = useMedia(TWO_PANE);
+  const twoPane = useMedia(MD_TWO_PANE);
   const [query, setQuery] = useState("");
   const [newParent, setNewParent] = useState("");
   const [newChild, setNewChild] = useState("");

@@ -18,9 +18,8 @@ import { api } from "../../lib/api.ts";
 import { dayLabel, dayOptionLabel, formatShortDate, formatWon } from "../../lib/format.ts";
 import { useHousehold, useHouseholdMutation, type HouseholdData } from "../../lib/queries.ts";
 import { useCardBills } from "../../lib/useCardBills.ts";
-import { useMedia, useNumericInputMode } from "../../lib/useMedia.ts";
+import { MD_TWO_PANE, useMedia, useNumericInputMode } from "../../lib/useMedia.ts";
 
-const TWO_PANE = "(min-width: 1280px)";
 const NEW = "new";
 const CUSTOM = "__custom";
 const OFFSETS = [
@@ -34,7 +33,7 @@ export function PaymentMethodsSection() {
   const { data } = useHousehold();
   const { bills } = useCardBills();
   const [params, setParams] = useSearchParams();
-  const twoPane = useMedia(TWO_PANE);
+  const twoPane = useMedia(MD_TWO_PANE);
   const [query, setQuery] = useState("");
 
   const methods = data!.paymentMethods;

@@ -17,9 +17,8 @@ import SelectControl from "../../components/SelectControl/index.ts";
 import { api } from "../../lib/api.ts";
 import { dayLabel, dayOptionLabel, formatShortDate, formatWon, formatYearMonth } from "../../lib/format.ts";
 import { keys, useHousehold, type HouseholdData } from "../../lib/queries.ts";
-import { useMedia, useNumericInputMode } from "../../lib/useMedia.ts";
+import { MD_TWO_PANE, useMedia, useNumericInputMode } from "../../lib/useMedia.ts";
 
-const TWO_PANE = "(min-width: 1280px)";
 const NEW = "new";
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -27,7 +26,7 @@ export function FixedExpensesSection() {
   const { data } = useHousehold();
   const items = useQuery({ queryKey: keys.recurring, queryFn: () => api<RecurringExpense[]>("/api/recurring") });
   const [params, setParams] = useSearchParams();
-  const twoPane = useMedia(TWO_PANE);
+  const twoPane = useMedia(MD_TWO_PANE);
   const [query, setQuery] = useState("");
 
   const all = items.data ?? [];

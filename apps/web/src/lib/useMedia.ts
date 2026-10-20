@@ -21,3 +21,6 @@ export const WIDE_EDITOR = "(min-width: 1180px)";
 export function useNumericInputMode(): "numeric" | undefined {
   return useMedia("(pointer: coarse)") ? "numeric" : undefined;
 }
+
+/** 설정의 목록 + 상세 화면을 나란히 보여주는 기준. styles.css 의 .md 미디어 쿼리와 같다. */
+export const MD_TWO_PANE = "(min-width: 1360px)";
