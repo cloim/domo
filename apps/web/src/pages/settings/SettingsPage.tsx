@@ -14,6 +14,8 @@ interface Section {
   label: string;
   icon: typeof House;
   ownerOnly?: boolean;
+  /** 목록 + 상세 화면처럼 폭 제한 없이 상세 영역을 꽉 채운다. */
+  fill?: boolean;
   render: () => React.ReactNode;
 }
 
@@ -29,8 +31,8 @@ const GROUPS: { title: string; items: Section[] }[] = [
   {
     title: "기록",
     items: [
-      { id: "payment-methods", label: "지출수단", icon: CreditCard, render: () => <PaymentMethodsSection /> },
-      { id: "categories", label: "분류", icon: Shapes, render: () => <CategoriesSection /> },
+      { id: "payment-methods", label: "지출수단", icon: CreditCard, fill: true, render: () => <PaymentMethodsSection /> },
+      { id: "categories", label: "분류", icon: Shapes, fill: true, render: () => <CategoriesSection /> },
     ],
   },
   { title: "앱", items: [{ id: "app", label: "앱 정보와 업데이트", icon: Info, render: () => <AppSection /> }] },
@@ -74,7 +76,9 @@ export function SettingsPage() {
               );
             })}
           </nav>
-          <div className="settings-detail">{household.data ? <div className="settings-body">{active?.render()}</div> : <SettingsSkeleton />}</div>
+          <div className={`settings-detail${active?.fill ? " is-fill" : ""}`}>
+            {!household.data ? <SettingsSkeleton /> : active?.fill ? active.render() : <div className="settings-body">{active?.render()}</div>}
+          </div>
         </div>
       </div>
     </>

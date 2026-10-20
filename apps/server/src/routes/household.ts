@@ -74,7 +74,7 @@ export async function householdRoutes(app: FastifyInstance, { db, config }: { db
       household: { id: household!.id, name: household!.name },
       me: { memberId: me.id, role: me.role },
       members,
-      paymentMethods: methods.map((m) => ({ id: m.id, type: m.type, name: m.name, sortOrder: m.sortOrder, archived: !!m.archivedAt })),
+      paymentMethods: methods.map(({ householdId: _, archivedAt, createdAt: __, ...m }) => ({ ...m, archived: !!archivedAt })),
       categories: cats.map((c) => ({ id: c.id, kind: c.kind, parentId: c.parentId, name: c.name, sortOrder: c.sortOrder, archived: !!c.archivedAt })),
     };
   });

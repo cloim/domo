@@ -1,9 +1,19 @@
-import { canEditTransaction, categoryInputSchema, paymentMethodInputSchema, reorderSchema, transactionInputSchema, type TransactionInput } from "@domo/core";
+import {
+  allowsInstallment,
+  canEditTransaction,
+  categoryInputSchema,
+  paymentMethodInputSchema,
+  paymentMethodLabel,
+  reorderSchema,
+  transactionInputSchema,
+  type PaymentMethodInput,
+  type TransactionInput,
+} from "@domo/core";
 import { and, count, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/client.ts";
-import { categories, paymentMethods, transactions } from "../db/schema.ts";
+import { categories, householdMembers, paymentMethods, transactions } from "../db/schema.ts";
 import { HttpError, parse, requireMember, type MemberRow } from "../http.ts";
 
 const rangeSchema = z.object({ start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
@@ -30,7 +40,7 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
     if (input.paymentMethodId) {
       const [method] = await db.select().from(paymentMethods).where(and(eq(paymentMethods.id, input.paymentMethodId), eq(paymentMethods.householdId, me.householdId)));
       if (!method) throw new HttpError(400, "지출수단을 다시 선택해 주세요.");
-      if (method.type === "cash" && input.installmentMonths !== 1) throw new HttpError(400, "할부는 카드에서만 가능합니다.");
+      if (!allowsInstallment(method) && input.installmentMonths !== 1) throw new HttpError(400, "할부는 신용카드에서만 가능합니다.");
     }
   }
 
@@ -84,29 +94,61 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
 
   // 지출수단과 분류는 모든 구성원이 관리한다. 기록에서 쓰인 항목은 지우지 않고 보관하여 과거 내역을 지킨다.
 
+  /** 입력값을 저장할 컬럼으로 바꾼다. 현금은 카드 속성을 비운다. */
+  async function methodValues(me: MemberRow, input: PaymentMethodInput) {
+    if (input.holderMemberId) {
+      const [holder] = await db.select().from(householdMembers).where(and(eq(householdMembers.id, input.holderMemberId), eq(householdMembers.householdId, me.householdId)));
+      if (!holder) throw new HttpError(400, "명의자를 다시 선택해 주세요.");
+    }
+    const card = input.type === "card";
+    return {
+      type: input.type,
+      name: paymentMethodLabel(input),
+      archivedAt: input.active ? null : new Date(),
+      issuer: card ? input.issuer : null,
+      cardKind: card ? input.cardKind : null,
+      last4: card ? input.last4 : null,
+      cycleStartOffset: card ? input.cycleStartOffset : null,
+      cycleStartDay: card ? input.cycleStartDay : null,
+      cycleEndOffset: card ? input.cycleEndOffset : null,
+      cycleEndDay: card ? input.cycleEndDay : null,
+      paymentDay: card ? input.paymentDay : null,
+      holderMemberId: card ? input.holderMemberId : null,
+      holderName: card ? input.holderName || null : null,
+    };
+  }
+
+  async function activeMethodCount(householdId: string) {
+    const [row] = await db.select({ n: count() }).from(paymentMethods).where(and(eq(paymentMethods.householdId, householdId), isNull(paymentMethods.archivedAt)));
+    return row!.n;
+  }
+
   app.post("/api/payment-methods", async (req) => {
     const me = await requireMember(db, req);
     const input = parse(paymentMethodInputSchema, req.body);
     const [{ n }] = (await db.select({ n: count() }).from(paymentMethods).where(eq(paymentMethods.householdId, me.householdId))) as [{ n: number }];
-    const [row] = await db.insert(paymentMethods).values({ ...input, householdId: me.householdId, sortOrder: n }).returning();
+    const [row] = await db.insert(paymentMethods).values({ ...(await methodValues(me, input)), householdId: me.householdId, sortOrder: n }).returning();
     return { id: row!.id };
   });
 
-  app.patch<{ Params: { id: string } }>("/api/payment-methods/:id", async (req) => {
+  app.put<{ Params: { id: string } }>("/api/payment-methods/:id", async (req) => {
     const me = await requireMember(db, req);
-    const { name, archived } = parse(z.object({ name: z.string().trim().min(1).max(40).optional(), archived: z.boolean().optional() }), req.body);
-    await db
-      .update(paymentMethods)
-      .set({ ...(name ? { name } : {}), ...(archived === undefined ? {} : { archivedAt: archived ? new Date() : null }) })
-      .where(and(eq(paymentMethods.id, req.params.id), eq(paymentMethods.householdId, me.householdId)));
+    const input = parse(paymentMethodInputSchema, req.body);
+    const where = and(eq(paymentMethods.id, req.params.id), eq(paymentMethods.householdId, me.householdId));
+    const [current] = await db.select().from(paymentMethods).where(where);
+    if (!current) throw new HttpError(404, "지출수단을 찾을 수 없습니다.");
+    if (current.type !== input.type) throw new HttpError(400, "지출수단 유형은 바꿀 수 없습니다.");
+    if (!input.active && !current.archivedAt && (await activeMethodCount(me.householdId)) <= 1) throw new HttpError(400, "사용 중인 지출수단이 최소 하나는 있어야 합니다.");
+    await db.update(paymentMethods).set(await methodValues(me, input)).where(where);
     return { ok: true };
   });
 
   app.delete<{ Params: { id: string } }>("/api/payment-methods/:id", async (req) => {
     const me = await requireMember(db, req);
     const where = and(eq(paymentMethods.id, req.params.id), eq(paymentMethods.householdId, me.householdId));
-    const [active] = await db.select({ n: count() }).from(paymentMethods).where(and(eq(paymentMethods.householdId, me.householdId), isNull(paymentMethods.archivedAt)));
-    if (active!.n <= 1) throw new HttpError(400, "지출수단은 최소 하나가 필요합니다.");
+    const [target] = await db.select().from(paymentMethods).where(where);
+    if (!target) throw new HttpError(404, "지출수단을 찾을 수 없습니다.");
+    if (!target.archivedAt && (await activeMethodCount(me.householdId)) <= 1) throw new HttpError(400, "사용 중인 지출수단이 최소 하나는 있어야 합니다.");
     const [used] = await db.select({ n: count() }).from(transactions).where(eq(transactions.paymentMethodId, req.params.id));
     if (used!.n > 0) {
       await db.update(paymentMethods).set({ archivedAt: new Date() }).where(where);

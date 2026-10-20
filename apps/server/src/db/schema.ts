@@ -48,9 +48,22 @@ export const paymentMethods = pgTable("payment_methods", {
   id: uuid("id").primaryKey().defaultRandom(),
   householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
   type: text("type", { enum: ["cash", "card"] }).notNull(),
+  /** 별칭 */
   name: text("name").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
+  /** 사용 여부. 값이 있으면 미사용 */
   archivedAt: timestamp("archived_at", { withTimezone: true }),
+  issuer: text("issuer"),
+  cardKind: text("card_kind", { enum: ["credit", "check"] }),
+  last4: text("last4"),
+  /** 결제월 기준 개월 차이와 일(31은 말일) */
+  cycleStartOffset: integer("cycle_start_offset"),
+  cycleStartDay: integer("cycle_start_day"),
+  cycleEndOffset: integer("cycle_end_offset"),
+  cycleEndDay: integer("cycle_end_day"),
+  paymentDay: integer("payment_day"),
+  holderMemberId: uuid("holder_member_id").references(() => householdMembers.id, { onDelete: "set null" }),
+  holderName: text("holder_name"),
   createdAt: createdAt(),
 });
 

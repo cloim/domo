@@ -14,6 +14,23 @@ async function login(email: string, name: string) {
     app.inject({ method, url, payload, headers: { authorization: `Bearer ${token}` } });
 }
 
+const cardInput = (over: object = {}) => ({
+  type: "card",
+  name: "",
+  active: true,
+  issuer: "신한카드",
+  cardKind: "credit",
+  last4: "1234",
+  cycleStartOffset: -1,
+  cycleStartDay: 1,
+  cycleEndOffset: -1,
+  cycleEndDay: 31,
+  paymentDay: 14,
+  holderMemberId: null,
+  holderName: null,
+  ...over,
+});
+
 beforeAll(async () => {
   process.env.NODE_ENV = "test";
   await db.execute(sql`DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public;`);
@@ -49,7 +66,7 @@ describe("가계부 API", () => {
     expect((await member("POST", "/api/join", { code: invite.code.toLowerCase() })).statusCode).toBe(200);
     expect((await member("POST", "/api/invites")).statusCode).toBe(403);
 
-    const card = (await owner("POST", "/api/payment-methods", { type: "card", name: "신한카드" })).json();
+    const card = (await owner("POST", "/api/payment-methods", cardInput())).json();
     const created = await owner("POST", "/api/transactions", {
       kind: "expense",
       paymentMethodId: card.id,
@@ -93,8 +110,30 @@ describe("가계부 API", () => {
     const after = (await owner("GET", "/api/household")).json();
     expect(after.categories.find((c: { id: string }) => c.id === child.id).archived).toBe(true);
 
-    const unused = (await owner("POST", "/api/payment-methods", { type: "card", name: "임시카드" })).json();
+    const unused = (await owner("POST", "/api/payment-methods", cardInput({ name: "임시카드" }))).json();
     expect((await owner("DELETE", `/api/payment-methods/${unused.id}`)).json()).toEqual({ archived: false });
+  });
+});
+
+describe("카드 지출수단", () => {
+  it("부가 정보를 저장하고 체크카드 할부를 막는다", async () => {
+    const owner = await login("dad@test.com", "아빠");
+    const base = (await owner("GET", "/api/household")).json();
+    const grocery = base.categories.find((c: { parentId: string | null; name: string }) => c.parentId && c.name === "장보기");
+    const created = (await owner("POST", "/api/payment-methods", cardInput({ cardKind: "check", last4: "9876", holderName: "아이" }))).json();
+    const saved = (await owner("GET", "/api/household")).json().paymentMethods.find((m: { id: string }) => m.id === created.id);
+    expect(saved).toMatchObject({ name: "신한카드 9876", cardKind: "check", paymentDay: 14, holderName: "아이", archived: false });
+
+    const tx = { kind: "expense", paymentMethodId: created.id, counterparty: "편의점", memo: null, amount: 30000, installmentMonths: 3, categoryId: grocery.id, occurredAt: "2026-10-01T09:00" };
+    expect((await owner("POST", "/api/transactions", tx)).statusCode).toBe(400);
+    expect((await owner("POST", "/api/transactions", { ...tx, installmentMonths: 1 })).statusCode).toBe(200);
+
+    // 명의자를 구성원으로 바꾸고 미사용으로 돌린다.
+    const put = await owner("PUT", `/api/payment-methods/${created.id}`, cardInput({ name: "아이 카드", cardKind: "check", holderMemberId: base.me.memberId, active: false }));
+    expect(put.statusCode).toBe(200);
+    const after = (await owner("GET", "/api/household")).json().paymentMethods.find((m: { id: string }) => m.id === created.id);
+    expect(after).toMatchObject({ name: "아이 카드", holderMemberId: base.me.memberId, holderName: null, archived: true });
+    expect((await owner("PUT", `/api/payment-methods/${created.id}`, cardInput({ holderMemberId: "6f1c2b9e-1d2a-4b7a-9c3d-2a1b3c4d5e6f" }))).statusCode).toBe(400);
   });
 });
 

@@ -21,6 +21,7 @@ import { TopBar } from "../../components/AppShell.tsx";
 import { MonthSwitch } from "../../components/MonthSwitch.tsx";
 import { formatShortDate, formatWon, formatWonShort } from "../../lib/format.ts";
 import { useHousehold, useTransactions, type Me } from "../../lib/queries.ts";
+import { useCardBills } from "../../lib/useCardBills.ts";
 import { baseOptions, MAX_SLICES, SERIES, token } from "./charts.ts";
 
 type Mode = "month" | "range";
@@ -132,6 +133,7 @@ export function StatsPage() {
                   <TimelinePanel stats={stats} />
                   <BarPanel title="구성원별" slices={stats.byMember} useOwnColor />
                   {kind === "expense" && <BarPanel title="지출수단별" slices={stats.byPaymentMethod} />}
+                  {kind === "expense" && <CardBillsPanel />}
                 </div>
               )}
             </>
@@ -279,6 +281,43 @@ function BarPanel({ title, slices, useOwnColor }: { title: string; slices: StatS
           ))}
         </tbody>
       </table>
+    </section>
+  );
+}
+
+/** 조회 기간과 무관하게 오늘 기준 다음 결제 예정 금액을 보여준다. */
+function CardBillsPanel() {
+  const { data } = useHousehold();
+  const { bills, isPending } = useCardBills();
+  const rows = (data?.paymentMethods ?? [])
+    .filter((m) => !m.archived && bills.has(m.id))
+    .map((m) => ({ method: m, bill: bills.get(m.id)! }))
+    .sort((a, b) => a.bill.paymentDate.localeCompare(b.bill.paymentDate));
+  if (!isPending && rows.length === 0) return null;
+  return (
+    <section className="panel" aria-labelledby="stat-bills">
+      <h2 id="stat-bills">카드 결제 예정</h2>
+      {isPending ? (
+        <span className="skeleton" style={{ display: "block", height: 104 }} />
+      ) : (
+        <ul className="bills-list">
+          {rows.map(({ method, bill }) => (
+            <li key={method.id}>
+              <span className="md-item-main">
+                <strong>{method.name}</strong>
+                <span className="md-item-sub">
+                  {formatShortDate(bill.usage.start)} ~ {formatShortDate(bill.usage.end)} 사용분{bill.inProgress ? ", 집계 중" : ""}
+                </span>
+              </span>
+              <span style={{ textAlign: "right" }}>
+                <strong className="num">{formatWon(bill.amount)}원</strong>
+                <br />
+                <span className="hint">{formatShortDate(bill.paymentDate)} 결제</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

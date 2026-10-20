@@ -26,3 +26,8 @@ export const DEFAULT_PAYMENT_METHODS = [{ type: "cash" as const, name: "현금" 
 
 /** 구성원 표시색. 합류 순서대로 배정한다. */
 export const MEMBER_COLORS = ["#c2512f", "#2f6f73", "#b8892c", "#5b5f97", "#7a8c3a", "#9a4f7b"];
+
+export const CARD_ISSUERS = ["신한카드", "삼성카드", "현대카드", "KB국민카드", "롯데카드", "우리카드", "하나카드", "BC카드", "NH농협카드", "IBK기업은행", "카카오뱅크", "토스뱅크", "씨티카드"];
+
+/** 새 카드 기본 집계 기간과 결제일: 전월 1일 ~ 전월 말일, 매월 14일 결제 */
+export const DEFAULT_CARD_BILLING = { cycleStartOffset: -1, cycleStartDay: 1, cycleEndOffset: -1, cycleEndDay: 31, paymentDay: 14 };

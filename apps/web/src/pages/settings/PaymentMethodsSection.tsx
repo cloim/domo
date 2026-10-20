@@ -1,134 +1,481 @@
-import type { PaymentMethod } from "@domo/core";
-import { ArrowDown, ArrowUp, Banknote, Check, CreditCard, Pencil, RotateCcw, Trash2, X } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import {
+  CARD_ISSUERS,
+  DEFAULT_CARD_BILLING,
+  nextBillingCycle,
+  nowLocalDateTime,
+  paymentMethodInputSchema,
+  paymentMethodLabel,
+  type CardBill,
+  type PaymentMethod,
+  type PaymentMethodInput,
+} from "@domo/core";
+import { ArrowDown, ArrowUp, Banknote, ChevronLeft, CreditCard, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router";
 import { useDialog } from "../../components/Dialogs.tsx";
+import SelectControl from "../../components/SelectControl/index.ts";
 import { api } from "../../lib/api.ts";
-import { useHousehold, useHouseholdMutation } from "../../lib/queries.ts";
+import { formatShortDate, formatWon } from "../../lib/format.ts";
+import { useHousehold, useHouseholdMutation, type HouseholdData } from "../../lib/queries.ts";
+import { useCardBills } from "../../lib/useCardBills.ts";
+import { useMedia } from "../../lib/useMedia.ts";
+
+const TWO_PANE = "(min-width: 1280px)";
+const NEW = "new";
+const CUSTOM = "__custom";
+const OFFSETS = [
+  { value: -2, label: "전전월" },
+  { value: -1, label: "전월" },
+  { value: 0, label: "당월" },
+];
+const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+const dayLabel = (d: number) => (d === 31 ? "말일" : `${d}일`);
 
 export function PaymentMethodsSection() {
   const { data } = useHousehold();
-  const dialog = useDialog();
-  const [name, setName] = useState("");
-  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
+  const { bills } = useCardBills();
+  const [params, setParams] = useSearchParams();
+  const twoPane = useMedia(TWO_PANE);
+  const [query, setQuery] = useState("");
 
-  const add = useHouseholdMutation((n: string) => api("/api/payment-methods", { method: "POST", body: { type: "card", name: n } }));
-  const patch = useHouseholdMutation(({ id, body }: { id: string; body: object }) => api(`/api/payment-methods/${id}`, { method: "PATCH", body }));
+  const methods = data!.paymentMethods;
+  const q = query.trim().toLowerCase();
+  const visible = methods.filter((m) => !q || [m.name, m.issuer, m.last4].some((v) => v?.toLowerCase().includes(q)));
+  const active = visible.filter((m) => !m.archived);
+  const inactive = visible.filter((m) => m.archived);
+
+  // 넓은 화면은 첫 항목을 바로 보여주고, 좁은 화면은 목록부터 보여준다.
+  const requested = params.get("id");
+  const selectedId = requested ?? (twoPane ? (methods.find((m) => !m.archived)?.id ?? null) : null);
+  const selected = selectedId === NEW ? null : (methods.find((m) => m.id === selectedId) ?? null);
+  const select = (id: string | null) => {
+    const next = new URLSearchParams(params);
+    if (id) next.set("id", id);
+    else next.delete("id");
+    setParams(next, { replace: !twoPane && !id });
+  };
+
+  return (
+    <div className={`md${selectedId ? " has-selection" : ""}`}>
+      <section className="md-list" aria-label="지출수단 목록">
+        <div className="md-list-head">
+          <div className="md-search">
+            <Search size={16} aria-hidden="true" />
+            <input className="input" type="search" placeholder="별칭, 카드사, 끝번호" aria-label="지출수단 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
+        </div>
+        <div className="md-list-body">
+          {active.map((m) => (
+            <MethodItem key={m.id} method={m} bill={bills.get(m.id)} current={m.id === selectedId} onSelect={() => select(m.id)} />
+          ))}
+          {inactive.length > 0 && <div className="md-group">사용 안 함</div>}
+          {inactive.map((m) => (
+            <MethodItem key={m.id} method={m} current={m.id === selectedId} onSelect={() => select(m.id)} />
+          ))}
+          {visible.length === 0 && <p className="hint" style={{ padding: "12px 10px" }}>검색 결과가 없어요.</p>}
+        </div>
+        <div className="md-list-foot">
+          <button type="button" className="btn btn-primary btn-block" onClick={() => select(NEW)}>
+            <Plus size={17} aria-hidden="true" /> 카드 추가
+          </button>
+        </div>
+      </section>
+
+      <section className="md-detail" aria-label="지출수단 상세">
+        {selectedId === NEW || selected ? (
+          <MethodEditor key={selectedId} data={data!} method={selected} bill={selected ? bills.get(selected.id) : undefined} onBack={() => select(null)} onSaved={select} />
+        ) : (
+          <div className="md-empty">지출수단을 골라 주세요.</div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function MethodItem({ method: m, bill, current, onSelect }: { method: PaymentMethod; bill?: CardBill; current: boolean; onSelect: () => void }) {
+  const sub = m.type === "cash" ? ["현금"] : [m.issuer, m.cardKind === "check" ? "체크" : m.cardKind === "credit" ? "신용" : null, m.last4].filter(Boolean);
+  return (
+    <button type="button" className={`md-item${m.archived ? " is-off" : ""}`} aria-current={current} onClick={onSelect}>
+      <span className="md-item-icon">{m.type === "cash" ? <Banknote size={18} aria-hidden="true" /> : <CreditCard size={18} aria-hidden="true" />}</span>
+      <span className="md-item-main">
+        <strong>{m.name}</strong>
+        <span className="md-item-sub">
+          {sub.map((s, i) => (
+            <span key={i} style={{ display: "contents" }}>
+              {i > 0 && <span className="sep" aria-hidden="true" />}
+              <span>{s}</span>
+            </span>
+          ))}
+        </span>
+      </span>
+      {bill && (
+        <span className="md-item-end num">
+          {formatWon(bill.amount)}원
+          <br />
+          <span style={{ color: "var(--ink-3)", fontSize: 12 }}>{formatShortDate(bill.paymentDate)} 결제</span>
+        </span>
+      )}
+    </button>
+  );
+}
+
+type Draft = Omit<PaymentMethodInput, "cycleStartOffset" | "cycleStartDay" | "cycleEndOffset" | "cycleEndDay" | "paymentDay"> & {
+  billing: boolean;
+  cycleStartOffset: number;
+  cycleStartDay: number;
+  cycleEndOffset: number;
+  cycleEndDay: number;
+  paymentDay: number;
+};
+
+function toDraft(m: PaymentMethod | null): Draft {
+  if (!m) {
+    return { type: "card", name: "", active: true, issuer: CARD_ISSUERS[0]!, cardKind: "credit", last4: null, holderMemberId: null, holderName: null, billing: true, ...DEFAULT_CARD_BILLING };
+  }
+  return {
+    type: m.type,
+    name: m.name,
+    active: !m.archived,
+    issuer: m.issuer,
+    cardKind: m.cardKind,
+    last4: m.last4,
+    holderMemberId: m.holderMemberId,
+    holderName: m.holderName,
+    billing: m.paymentDay !== null,
+    cycleStartOffset: m.cycleStartOffset ?? DEFAULT_CARD_BILLING.cycleStartOffset,
+    cycleStartDay: m.cycleStartDay ?? DEFAULT_CARD_BILLING.cycleStartDay,
+    cycleEndOffset: m.cycleEndOffset ?? DEFAULT_CARD_BILLING.cycleEndOffset,
+    cycleEndDay: m.cycleEndDay ?? DEFAULT_CARD_BILLING.cycleEndDay,
+    paymentDay: m.paymentDay ?? DEFAULT_CARD_BILLING.paymentDay,
+  };
+}
+
+function toInput({ billing, ...d }: Draft): PaymentMethodInput {
+  return {
+    ...d,
+    name: d.name.trim(),
+    last4: d.last4 || null,
+    holderName: d.holderName?.trim() || null,
+    cycleStartOffset: billing ? d.cycleStartOffset : null,
+    cycleStartDay: billing ? d.cycleStartDay : null,
+    cycleEndOffset: billing ? d.cycleEndOffset : null,
+    cycleEndDay: billing ? d.cycleEndDay : null,
+    paymentDay: billing ? d.paymentDay : null,
+  };
+}
+
+interface EditorProps {
+  data: HouseholdData;
+  method: PaymentMethod | null;
+  bill?: CardBill;
+  onBack: () => void;
+  onSaved: (id: string) => void;
+}
+
+function MethodEditor({ data, method, bill, onBack, onSaved }: EditorProps) {
+  const dialog = useDialog();
+  const [draft, setDraft] = useState<Draft>(() => toDraft(method));
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [customIssuer, setCustomIssuer] = useState(() => !!method?.issuer && !CARD_ISSUERS.includes(method.issuer));
+  const [customHolder, setCustomHolder] = useState(() => !!method?.holderName);
+  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
+
+  useEffect(() => {
+    setDraft(toDraft(method));
+    setErrors({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [method?.id]);
+
+  const save = useHouseholdMutation(async (input: PaymentMethodInput) =>
+    method ? (await api(`/api/payment-methods/${method.id}`, { method: "PUT", body: input }), method.id) : (await api<{ id: string }>("/api/payment-methods", { method: "POST", body: input })).id,
+  );
   const remove = useHouseholdMutation((id: string) => api<{ archived: boolean }>(`/api/payment-methods/${id}`, { method: "DELETE" }));
   const reorder = useHouseholdMutation((ids: string[]) => api("/api/payment-methods/order", { method: "PUT", body: { ids } }));
 
-  const active = data!.paymentMethods.filter((m) => !m.archived);
-  const archived = data!.paymentMethods.filter((m) => m.archived);
+  const isCard = draft.type === "card";
+  const autoName = paymentMethodLabel({ name: "", issuer: draft.issuer, last4: draft.last4 });
+  const today = nowLocalDateTime().slice(0, 10);
+  const preview = useMemo(() => (draft.billing ? nextBillingCycle(draft, today) : null), [draft, today]);
 
-  const fail = (title: string) => (err: Error) => void dialog.alert(title, err.message);
-
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    add.mutate(name.trim(), { onSuccess: () => setName(""), onError: fail("추가하지 못했습니다") });
-  }
-
-  async function onDelete(m: PaymentMethod) {
-    const ok = await dialog.confirm({ title: "지출수단 삭제", message: `${m.name}을(를) 삭제할까요?\n기록에 쓰인 수단은 보관함으로 옮겨져 과거 내역에 그대로 남습니다.`, confirmLabel: "삭제", danger: true });
-    if (!ok) return;
-    remove.mutate(m.id, {
-      onSuccess: (r) => r.archived && void dialog.alert("보관했습니다", `${m.name}은(는) 기록에 쓰여 보관함으로 옮겼어요.`),
-      onError: fail("삭제하지 못했습니다"),
-    });
-  }
-
-  function move(index: number, delta: number) {
-    const ids = active.map((m) => m.id);
+  const ordered = data.paymentMethods.filter((m) => !m.archived);
+  const index = method ? ordered.findIndex((m) => m.id === method.id) : -1;
+  function move(delta: number) {
+    const ids = ordered.map((m) => m.id);
     const [moved] = ids.splice(index, 1);
     ids.splice(index + delta, 0, moved!);
-    reorder.mutate(ids, { onError: fail("순서를 바꾸지 못했습니다") });
+    reorder.mutate(ids, { onError: (err) => void dialog.alert("순서를 바꾸지 못했습니다", err.message) });
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const parsed = paymentMethodInputSchema.safeParse(toInput(draft));
+    if (!parsed.success) {
+      const next: Record<string, string> = {};
+      for (const issue of parsed.error.issues) next[String(issue.path[0])] ??= issue.message;
+      setErrors(next);
+      return;
+    }
+    setErrors({});
+    try {
+      const id = await save.mutateAsync(parsed.data);
+      await dialog.alert("저장했습니다", `${paymentMethodLabel(parsed.data)} 정보를 저장했어요.`);
+      if (!method) onSaved(id);
+    } catch (err) {
+      await dialog.alert("저장하지 못했습니다", (err as Error).message);
+    }
+  }
+
+  async function onDelete() {
+    if (!method) return;
+    const ok = await dialog.confirm({
+      title: "지출수단 삭제",
+      message: `${method.name}을(를) 삭제할까요?\n기록에 쓰인 지출수단은 지우지 않고 '사용 안 함'으로 바꿔 과거 내역을 지킵니다.`,
+      confirmLabel: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      const r = await remove.mutateAsync(method.id);
+      if (r.archived) await dialog.alert("사용 안 함으로 바꿨습니다", `${method.name}은(는) 기록에 쓰여 삭제하지 않고 사용 안 함으로 바꿨어요.`);
+      onBack();
+    } catch (err) {
+      await dialog.alert("삭제하지 못했습니다", (err as Error).message);
+    }
   }
 
   return (
-    <>
-      <section>
-        <div className="section-head">
-          <h2>사용 중</h2>
-        </div>
-        <ul className="list">
-          {active.map((m, i) => (
-            <li key={m.id}>
-              {m.type === "cash" ? <Banknote size={19} aria-hidden="true" /> : <CreditCard size={19} aria-hidden="true" />}
-              {editing?.id === m.id ? (
-                <form
-                  className="inline-form"
-                  style={{ flex: 1 }}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (editing.name.trim()) patch.mutate({ id: m.id, body: { name: editing.name.trim() } }, { onSuccess: () => setEditing(null), onError: fail("저장하지 못했습니다") });
+    <form onSubmit={submit} noValidate style={{ display: "flex", flex: 1, flexDirection: "column" }}>
+      <div className="md-detail-head">
+        <button type="button" className="icon-btn md-back" aria-label="목록으로" onClick={onBack}>
+          <ChevronLeft size={20} aria-hidden="true" />
+        </button>
+        <h2>{method ? method.name : "새 카드"}</h2>
+        {method && !method.archived && (
+          <>
+            <button type="button" className="icon-btn" aria-label="위로" title="위로" disabled={index <= 0} onClick={() => move(-1)}>
+              <ArrowUp size={17} aria-hidden="true" />
+            </button>
+            <button type="button" className="icon-btn" aria-label="아래로" title="아래로" disabled={index < 0 || index >= ordered.length - 1} onClick={() => move(1)}>
+              <ArrowDown size={17} aria-hidden="true" />
+            </button>
+          </>
+        )}
+      </div>
+
+      <div className="md-detail-body">
+        {bill && (
+          <div className="bill">
+            <span className="bill-meta">다음 결제 {formatShortDate(bill.paymentDate)}</span>
+            <span className="bill-amount num">
+              {formatWon(bill.amount)}
+              <small>원</small>
+            </span>
+            <span className="bill-meta">
+              {formatShortDate(bill.usage.start)} ~ {formatShortDate(bill.usage.end)} 사용분 {bill.count}건{bill.inProgress ? ", 집계 중" : ""}
+            </span>
+          </div>
+        )}
+
+        {isCard && (
+          <>
+            <div className="form-row">
+              <div className="field">
+                <label className="field-label" htmlFor="pm-issuer">
+                  카드사
+                </label>
+                <SelectControl
+                  id="pm-issuer"
+                  value={customIssuer ? CUSTOM : (draft.issuer ?? "")}
+                  onChange={(e) => {
+                    const custom = e.target.value === CUSTOM;
+                    setCustomIssuer(custom);
+                    set("issuer", custom ? "" : e.target.value);
                   }}
                 >
-                  <input className="input" aria-label="지출수단 이름" maxLength={40} value={editing.name} onChange={(e) => setEditing({ id: m.id, name: e.target.value })} autoFocus />
-                  <button type="submit" className="icon-btn" aria-label="저장">
-                    <Check size={18} aria-hidden="true" />
-                  </button>
-                  <button type="button" className="icon-btn" aria-label="취소" onClick={() => setEditing(null)}>
-                    <X size={18} aria-hidden="true" />
-                  </button>
-                </form>
-              ) : (
+                  {CARD_ISSUERS.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                  <option value={CUSTOM}>직접 입력</option>
+                </SelectControl>
+              </div>
+              <div className="field">
+                <span className="field-label">종류</span>
+                <div className="segmented" role="group" aria-label="카드 종류" style={{ alignSelf: "flex-start" }}>
+                  {(["credit", "check"] as const).map((k) => (
+                    <button key={k} type="button" aria-pressed={draft.cardKind === k} onClick={() => set("cardKind", k)}>
+                      {k === "credit" ? "신용" : "체크"}
+                    </button>
+                  ))}
+                </div>
+                {errors.cardKind && <span className="field-error">{errors.cardKind}</span>}
+              </div>
+            </div>
+            {customIssuer && (
+              <input className="input" aria-label="카드사 이름" placeholder="카드사 이름" maxLength={30} value={draft.issuer ?? ""} onChange={(e) => set("issuer", e.target.value)} autoFocus />
+            )}
+            {errors.issuer && <span className="field-error">{errors.issuer}</span>}
+
+            <div className="form-row">
+              <div className="field">
+                <label className="field-label" htmlFor="pm-last4">
+                  <span>
+                    끝번호 <span className="field-optional">(선택)</span>
+                  </span>
+                </label>
+                <input
+                  id="pm-last4"
+                  className="input num"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="1234"
+                  aria-invalid={!!errors.last4}
+                  value={draft.last4 ?? ""}
+                  onChange={(e) => set("last4", e.target.value.replace(/\D/g, ""))}
+                />
+                {errors.last4 && <span className="field-error">{errors.last4}</span>}
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="pm-name">
+                  별칭
+                </label>
+                <input id="pm-name" className="input" maxLength={40} placeholder={autoName} value={draft.name} onChange={(e) => set("name", e.target.value)} />
+              </div>
+            </div>
+          </>
+        )}
+
+        {!isCard && (
+          <div className="field">
+            <label className="field-label" htmlFor="pm-name">
+              별칭
+            </label>
+            <input id="pm-name" className="input" maxLength={40} aria-invalid={!!errors.name} value={draft.name} onChange={(e) => set("name", e.target.value)} />
+            {errors.name && <span className="field-error">{errors.name}</span>}
+          </div>
+        )}
+
+        {isCard && (
+          <>
+            <div className="field">
+              <div className="field-label">
+                <span>집계 기간과 결제일</span>
+                <label className="switch">
+                  <input type="checkbox" checked={draft.billing} onChange={(e) => set("billing", e.target.checked)} />
+                  <span className="switch-track" aria-hidden="true" />
+                  <span className="sr-only">집계 기간과 결제일 사용</span>
+                </label>
+              </div>
+              {draft.billing && (
                 <>
-                  <span className="list-main">
-                    <strong>{m.name}</strong>
-                    <span>{m.type === "cash" ? "현금" : "카드"}</span>
-                  </span>
-                  <span className="list-actions">
-                    <button type="button" className="icon-btn" aria-label={`${m.name} 위로`} title="위로" disabled={i === 0} onClick={() => move(i, -1)}>
-                      <ArrowUp size={17} aria-hidden="true" />
-                    </button>
-                    <button type="button" className="icon-btn" aria-label={`${m.name} 아래로`} title="아래로" disabled={i === active.length - 1} onClick={() => move(i, 1)}>
-                      <ArrowDown size={17} aria-hidden="true" />
-                    </button>
-                    <button type="button" className="icon-btn" aria-label={`${m.name} 이름 수정`} title="이름 수정" onClick={() => setEditing({ id: m.id, name: m.name })}>
-                      <Pencil size={17} aria-hidden="true" />
-                    </button>
-                    <button type="button" className="icon-btn danger" aria-label={`${m.name} 삭제`} title="삭제" disabled={active.length <= 1} onClick={() => void onDelete(m)}>
-                      <Trash2 size={17} aria-hidden="true" />
-                    </button>
-                  </span>
+                  <div className="cycle-row">
+                    <span className="cycle-label">시작</span>
+                    <SelectControl aria-label="집계 시작 월" value={draft.cycleStartOffset} onChange={(e) => set("cycleStartOffset", Number(e.target.value))}>
+                      {OFFSETS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </SelectControl>
+                    <SelectControl aria-label="집계 시작일" value={draft.cycleStartDay} onChange={(e) => set("cycleStartDay", Number(e.target.value))}>
+                      {DAYS.map((d) => (
+                        <option key={d} value={d}>
+                          {dayLabel(d)}
+                        </option>
+                      ))}
+                    </SelectControl>
+                  </div>
+                  <div className="cycle-row">
+                    <span className="cycle-label">종료</span>
+                    <SelectControl aria-label="집계 종료 월" value={draft.cycleEndOffset} onChange={(e) => set("cycleEndOffset", Number(e.target.value))}>
+                      {OFFSETS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </SelectControl>
+                    <SelectControl aria-label="집계 종료일" value={draft.cycleEndDay} onChange={(e) => set("cycleEndDay", Number(e.target.value))}>
+                      {DAYS.map((d) => (
+                        <option key={d} value={d}>
+                          {dayLabel(d)}
+                        </option>
+                      ))}
+                    </SelectControl>
+                  </div>
+                  <div className="cycle-row">
+                    <span className="cycle-label">결제일</span>
+                    <SelectControl aria-label="결제일" value={draft.paymentDay} onChange={(e) => set("paymentDay", Number(e.target.value))}>
+                      {DAYS.map((d) => (
+                        <option key={d} value={d}>
+                          매월 {dayLabel(d)}
+                        </option>
+                      ))}
+                    </SelectControl>
+                  </div>
+                  {preview && !errors.cycleEndDay && (
+                    <span className="hint">
+                      예: {formatShortDate(preview.paymentDate)} 결제분은 {formatShortDate(preview.usage.start)} ~ {formatShortDate(preview.usage.end)} 사용분입니다.
+                    </span>
+                  )}
+                  {(errors.cycleEndDay || errors.paymentDay) && <span className="field-error">{errors.cycleEndDay ?? errors.paymentDay}</span>}
                 </>
               )}
-            </li>
-          ))}
-        </ul>
-      </section>
+            </div>
 
-      <section>
-        <div className="section-head">
-          <h2>카드 추가</h2>
-        </div>
-        <form className="inline-form" onSubmit={submit}>
-          <input className="input" placeholder="예: 신한 Deep Dream" aria-label="카드 이름" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
-          <button type="submit" className="btn btn-primary" disabled={!name.trim() || add.isPending}>
-            추가
-          </button>
-        </form>
-      </section>
-
-      {archived.length > 0 && (
-        <section>
-          <div className="section-head">
-            <h2>보관함</h2>
-          </div>
-          <ul className="list">
-            {archived.map((m) => (
-              <li key={m.id}>
-                <CreditCard size={19} aria-hidden="true" style={{ color: "var(--ink-3)" }} />
-                <span className="list-main">
-                  <strong style={{ color: "var(--ink-2)" }}>{m.name}</strong>
+            <div className="field">
+              <label className="field-label" htmlFor="pm-holder">
+                <span>
+                  명의자 <span className="field-optional">(선택)</span>
                 </span>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => patch.mutate({ id: m.id, body: { archived: false } }, { onError: fail("복원하지 못했습니다") })}>
-                  <RotateCcw size={15} aria-hidden="true" /> 다시 사용
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </>
+              </label>
+              <SelectControl
+                id="pm-holder"
+                value={customHolder ? CUSTOM : (draft.holderMemberId ?? "")}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCustomHolder(v === CUSTOM);
+                  setDraft((d) => ({ ...d, holderMemberId: v && v !== CUSTOM ? v : null, holderName: v === CUSTOM ? (d.holderName ?? "") : null }));
+                }}
+              >
+                <option value="">지정 안 함</option>
+                {data.members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.displayName}
+                  </option>
+                ))}
+                <option value={CUSTOM}>직접 입력</option>
+              </SelectControl>
+              {customHolder && (
+                <input className="input" aria-label="명의자 이름" placeholder="예: 첫째" maxLength={30} value={draft.holderName ?? ""} onChange={(e) => set("holderName", e.target.value)} />
+              )}
+            </div>
+          </>
+        )}
+
+        <div className="field">
+          <div className="field-label">
+            <span>사용 여부</span>
+            <label className="switch">
+              <span>{draft.active ? "사용 중" : "사용 안 함"}</span>
+              <input type="checkbox" checked={draft.active} onChange={(e) => set("active", e.target.checked)} />
+              <span className="switch-track" aria-hidden="true" />
+            </label>
+          </div>
+          {!draft.active && <span className="hint">기록 입력 목록에서 빠지고, 과거 기록에는 그대로 남아요.</span>}
+        </div>
+      </div>
+
+      <div className="md-detail-foot">
+        {method && (
+          <button type="button" className="btn btn-text-danger" onClick={() => void onDelete()} disabled={remove.isPending}>
+            <Trash2 size={17} aria-hidden="true" /> 삭제
+          </button>
+        )}
+        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
+          {save.isPending ? "저장 중" : method ? "저장" : "추가"}
+        </button>
+      </div>
+    </form>
   );
 }

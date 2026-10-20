@@ -12,8 +12,33 @@ import {
   splitInstallment,
   totalsByKind,
   transactionInputSchema,
+  allowsInstallment,
+  billingCycle,
+  cardBill,
+  nextBillingCycle,
+  paymentMethodInputSchema,
+  paymentMethodLabel,
+  type PaymentMethod,
   type Transaction,
 } from "./index.ts";
+
+const card: PaymentMethod = {
+  id: "p1",
+  type: "card",
+  name: "신한",
+  sortOrder: 0,
+  archived: false,
+  issuer: "신한카드",
+  cardKind: "credit",
+  last4: "1234",
+  cycleStartOffset: -1,
+  cycleStartDay: 1,
+  cycleEndOffset: -1,
+  cycleEndDay: 31,
+  paymentDay: 14,
+  holderMemberId: null,
+  holderName: null,
+};
 
 const tx = (over: Partial<Transaction>): Transaction => ({
   id: "t1",
@@ -94,7 +119,7 @@ describe("통계", () => {
         { id: "m1", userId: "u1", role: "owner", displayName: "아빠", color: "#000000", avatarUrl: null },
         { id: "m2", userId: "u2", role: "member", displayName: "엄마", color: "#ffffff", avatarUrl: null },
       ],
-      paymentMethods: [{ id: "p1", type: "card", name: "신한", sortOrder: 0, archived: false }],
+      paymentMethods: [card],
     });
     expect(stats.total).toBe(4000);
     expect(stats.byCategory[0]).toMatchObject({ label: "식비", amount: 4000, share: 1 });
@@ -130,5 +155,43 @@ describe("권한과 검증", () => {
     expect(isNewerVersion("v0.2.0", "0.1.9")).toBe(true);
     expect(isNewerVersion("v0.1.0", "0.1.0")).toBe(false);
     expect(isNewerVersion("0.10.0", "0.9.0")).toBe(true);
+  });
+});
+
+describe("카드 결제", () => {
+  it("결제월 기준으로 집계 기간을 계산한다", () => {
+    expect(billingCycle(card, "2026-11")).toEqual({ month: "2026-11", paymentDate: "2026-11-14", usage: { start: "2026-10-01", end: "2026-10-31" } });
+    const split = { ...card, cycleStartOffset: -2, cycleStartDay: 14, cycleEndOffset: -1, cycleEndDay: 13, paymentDay: 31 };
+    expect(billingCycle(split, "2027-02")).toEqual({ month: "2027-02", paymentDate: "2027-02-28", usage: { start: "2026-12-14", end: "2027-01-13" } });
+  });
+  it("결제일 당일까지는 이번 결제, 다음 날부터는 다음 결제", () => {
+    expect(nextBillingCycle(card, "2026-10-14")?.month).toBe("2026-10");
+    expect(nextBillingCycle(card, "2026-10-15")?.month).toBe("2026-11");
+    expect(nextBillingCycle({ ...card, paymentDay: null }, "2026-10-15")).toBeNull();
+  });
+  it("할부 회차를 해당 명세서에 넣어 결제 예정 금액을 낸다", () => {
+    const entries = expandEntries(
+      [
+        tx({ id: "a", amount: 90000, installmentMonths: 3, occurredAt: "2026-09-20T10:00" }),
+        tx({ id: "b", amount: 5000, occurredAt: "2026-10-31T23:00" }),
+        tx({ id: "c", amount: 7000, occurredAt: "2026-11-01T09:00" }),
+        tx({ id: "d", amount: 1000, paymentMethodId: "other", occurredAt: "2026-10-05T09:00" }),
+      ],
+      { start: "2026-08-01", end: "2026-12-31" },
+    );
+    // 11월 14일 결제: 10월 사용분 = 할부 2회차 30,000 + 5,000
+    expect(cardBill(entries, card, "2026-10-20")).toMatchObject({ month: "2026-11", amount: 35000, count: 2, inProgress: true });
+    expect(cardBill(entries, card, "2026-11-03")).toMatchObject({ amount: 35000, inProgress: false });
+  });
+  it("카드 입력 규칙과 할부 허용", () => {
+    const base = { type: "card", name: "", active: true, issuer: "신한카드", cardKind: "credit", last4: "1234", cycleStartOffset: -1, cycleStartDay: 1, cycleEndOffset: -1, cycleEndDay: 31, paymentDay: 14, holderMemberId: null, holderName: "아이" } as const;
+    expect(paymentMethodInputSchema.safeParse(base).success).toBe(true);
+    expect(paymentMethodInputSchema.safeParse({ ...base, paymentDay: null }).success).toBe(false);
+    expect(paymentMethodInputSchema.safeParse({ ...base, last4: "12a4" }).success).toBe(false);
+    expect(paymentMethodInputSchema.safeParse({ ...base, cycleStartOffset: 0 }).success).toBe(false);
+    expect(paymentMethodLabel(base)).toBe("신한카드 1234");
+    expect(allowsInstallment({ type: "card", cardKind: "check" })).toBe(false);
+    expect(allowsInstallment({ type: "cash", cardKind: null })).toBe(false);
+    expect(allowsInstallment({ type: "card", cardKind: "credit" })).toBe(true);
   });
 });

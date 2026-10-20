@@ -35,11 +35,55 @@ export const transactionInputSchema = z
   });
 export type TransactionInput = z.infer<typeof transactionInputSchema>;
 
-export const paymentMethodInputSchema = z.object({
-  type: z.enum(paymentMethodTypes),
-  name,
-});
+export const cardKinds = ["credit", "check"] as const;
+export type CardKind = (typeof cardKinds)[number];
+
+/** 결제월 기준 개월 차이. -2 전전월, -1 전월, 0 당월 */
+const monthOffset = z.number().int().min(-2).max(0);
+/** 1~31, 31은 말일 */
+const dayOfMonth = z.number().int().min(1).max(31);
+
+/** 지출수단 생성과 수정. 카드는 부가 정보를 함께 받고, 현금은 별칭과 사용 여부만 받는다. */
+export const paymentMethodInputSchema = z
+  .object({
+    type: z.enum(paymentMethodTypes),
+    name: z.string().trim().max(40),
+    active: z.boolean(),
+    issuer: z.string().trim().max(30).nullable(),
+    cardKind: z.enum(cardKinds).nullable(),
+    last4: z.string().regex(/^\d{4}$/, "끝번호는 숫자 4자리입니다.").nullable(),
+    cycleStartOffset: monthOffset.nullable(),
+    cycleStartDay: dayOfMonth.nullable(),
+    cycleEndOffset: monthOffset.nullable(),
+    cycleEndDay: dayOfMonth.nullable(),
+    paymentDay: dayOfMonth.nullable(),
+    holderMemberId: z.string().uuid().nullable(),
+    holderName: z.string().trim().max(30).nullable(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.type === "cash") {
+      if (!v.name) ctx.addIssue({ code: "custom", path: ["name"], message: "별칭을 입력해 주세요." });
+      return;
+    }
+    if (!v.issuer) ctx.addIssue({ code: "custom", path: ["issuer"], message: "카드사를 선택해 주세요." });
+    if (!v.cardKind) ctx.addIssue({ code: "custom", path: ["cardKind"], message: "카드 종류를 선택해 주세요." });
+    const billing = [v.cycleStartOffset, v.cycleStartDay, v.cycleEndOffset, v.cycleEndDay, v.paymentDay];
+    if (billing.some((x) => x === null) && billing.some((x) => x !== null)) {
+      ctx.addIssue({ code: "custom", path: ["paymentDay"], message: "집계 기간과 결제일은 함께 입력해 주세요." });
+    }
+    if (v.cycleStartOffset !== null && v.cycleEndOffset !== null && v.cycleStartDay !== null && v.cycleEndDay !== null) {
+      if (v.cycleStartOffset * 100 + v.cycleStartDay > v.cycleEndOffset * 100 + v.cycleEndDay) {
+        ctx.addIssue({ code: "custom", path: ["cycleEndDay"], message: "집계 종료일이 시작일보다 앞섭니다." });
+      }
+    }
+    if (v.holderMemberId && v.holderName) ctx.addIssue({ code: "custom", path: ["holderName"], message: "명의자는 하나만 지정해 주세요." });
+  });
 export type PaymentMethodInput = z.infer<typeof paymentMethodInputSchema>;
+
+/** 별칭을 비우면 카드사와 끝번호로 만든다. */
+export function paymentMethodLabel(v: Pick<PaymentMethodInput, "name" | "issuer" | "last4">): string {
+  return v.name || [v.issuer, v.last4].filter(Boolean).join(" ") || "카드";
+}
 
 export const categoryInputSchema = z.object({
   kind: z.enum(transactionKinds),

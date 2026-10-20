@@ -487,15 +487,6 @@ button.rank-row:hover { background: var(--hover); }
 .icon-btn.danger:hover { background: var(--danger-soft); }
 .inline-form { display: flex; gap: 8px; }
 .inline-form .input { flex: 1; }
-.cat-children { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 14px 38px; }
-.cat-chip { display: inline-flex; align-items: center; gap: 2px; height: 32px; padding: 0 4px 0 12px; border-radius: 999px; background: var(--sunken); font-size: 14px; }
-.cat-chip button { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; color: var(--ink-3); }
-.cat-chip button:hover { background: var(--hover); color: var(--ink); }
-.cat-add { height: 32px; padding: 0 12px; border-radius: 999px; box-shadow: inset 0 0 0 1px dashed var(--line-strong); border: 1px dashed var(--line-strong); color: var(--ink-3); font-size: 14px; }
-.cat-add:hover { color: var(--ink); }
-.cat-block + .cat-block { border-top: 1px solid var(--line); }
-.cat-block .cat-parent { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 8px 6px 16px; }
-.cat-parent strong { flex: 1; }
 .invite-card { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: var(--panel-pad); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .invite-card img { width: 180px; height: 180px; border-radius: 8px; background: #fff; padding: 8px; }
 .invite-info { display: flex; flex: 1 1 200px; flex-direction: column; gap: 6px; }
@@ -533,3 +524,81 @@ button.rank-row:hover { background: var(--hover); }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .google-slot { display: flex; justify-content: center; min-height: 44px; }
 .back-link { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 18px; color: var(--ink-3); font-size: 14px; }
+
+/* ───── 목록 + 상세 (설정의 지출수단, 분류) ───── */
+.settings-detail.is-fill { overflow: hidden; }
+.md { display: flex; height: 100%; }
+.md-list { display: flex; flex: none; flex-direction: column; width: 320px; border-right: 1px solid var(--line); }
+.md-list-head { display: flex; flex: none; flex-direction: column; gap: 10px; padding: 16px var(--gutter); }
+.md-list-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 16px; }
+.md-list-foot { flex: none; padding: 12px var(--gutter) calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+.md-search { position: relative; display: flex; align-items: center; }
+.md-search svg { position: absolute; left: 12px; color: var(--ink-3); pointer-events: none; }
+.md-search .input { height: 40px; padding-left: 36px; }
+.md-group { margin: 14px 8px 4px; color: var(--ink-3); font-size: 12px; font-weight: 600; }
+.md-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+.md-item:hover { background: var(--hover); }
+.md-item[aria-current="true"] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.md-item.is-off { color: var(--ink-3); }
+.md-item-icon { display: flex; flex: none; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; background: var(--sunken); color: var(--ink-2); }
+.md-item-main { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.md-item-main strong { overflow: hidden; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.md-item-sub { display: flex; align-items: center; gap: 6px; overflow: hidden; color: var(--ink-3); font-size: 13px; white-space: nowrap; }
+.md-item-sub .sep { flex: none; width: 2px; height: 2px; border-radius: 50%; background: var(--ink-3); }
+.md-item-end { flex: none; color: var(--ink-2); font-size: 13px; text-align: right; }
+.md-detail { display: flex; flex: 1; min-width: 0; flex-direction: column; overflow-y: auto; }
+.md-detail-head { display: flex; flex: none; align-items: center; gap: 8px; min-height: 60px; padding: 8px var(--gutter); border-bottom: 1px solid var(--line); }
+.md-detail-head h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; font-family: var(--font-display); font-size: 19px; white-space: nowrap; text-overflow: ellipsis; }
+.md-detail-body { display: flex; flex-direction: column; gap: var(--field-gap); width: 100%; max-width: 620px; padding: 20px var(--gutter); }
+.md-detail-foot { display: flex; flex: none; gap: 8px; margin-top: auto; padding: 12px var(--gutter) calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
+.md-detail-foot .btn-primary { margin-left: auto; min-width: 120px; }
+.md-back { display: inline-flex; }
+.md-empty { display: flex; flex: 1; align-items: center; justify-content: center; color: var(--ink-3); }
+/* 좁은 화면에서는 목록과 상세를 한 번에 하나만 보여준다. */
+@media (max-width: 1279px) {
+  .md-list { width: 100%; border-right: 0; }
+  .md:not(.has-selection) .md-detail { display: none; }
+  .md.has-selection .md-list { display: none; }
+}
+@media (min-width: 1280px) {
+  .md-back { display: none; }
+}
+
+.bill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.bill-amount { font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+.bill-amount small { margin-left: 2px; font-family: var(--font-body); font-size: 14px; color: var(--ink-3); }
+.bill-meta { color: var(--ink-3); font-size: 13px; }
+.hint { color: var(--ink-3); font-size: 13px; }
+
+.switch { position: relative; display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { position: relative; flex: none; width: 42px; height: 24px; border-radius: 999px; background: var(--line-strong); transition: background 0.15s; }
+.switch-track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform 0.15s; }
+.switch input:checked + .switch-track { background: var(--accent); }
+.switch input:checked + .switch-track::after { transform: translateX(18px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cycle-row { display: flex; align-items: center; gap: 8px; }
+.cycle-row .select-control { width: auto; flex: 1 1 0; max-width: 180px; }
+.cycle-label { flex: none; width: 48px; color: var(--ink-2); font-size: 14px; }
+
+.bills-list { margin: 0; padding: 0; list-style: none; }
+.bills-list li { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 0; }
+.bills-list li + li { border-top: 1px solid var(--line); }

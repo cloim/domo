@@ -1,5 +1,5 @@
 import { addMonths, type DateRange, isWithin } from "./dates.ts";
-import type { MemberRole, PaymentMethodType, TransactionKind } from "./schemas.ts";
+import type { CardKind, MemberRole, PaymentMethodType, TransactionKind } from "./schemas.ts";
 
 export interface Transaction {
   id: string;
@@ -29,6 +29,21 @@ export interface PaymentMethod {
   name: string;
   sortOrder: number;
   archived: boolean;
+  issuer: string | null;
+  cardKind: CardKind | null;
+  last4: string | null;
+  cycleStartOffset: number | null;
+  cycleStartDay: number | null;
+  cycleEndOffset: number | null;
+  cycleEndDay: number | null;
+  paymentDay: number | null;
+  holderMemberId: string | null;
+  holderName: string | null;
+}
+
+/** 신용카드만 할부를 받는다. */
+export function allowsInstallment(method: Pick<PaymentMethod, "type" | "cardKind"> | undefined): boolean {
+  return method?.type === "card" && method.cardKind !== "check";
 }
 
 export interface Category {

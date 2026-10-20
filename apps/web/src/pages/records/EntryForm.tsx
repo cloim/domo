@@ -1,4 +1,5 @@
 import {
+  allowsInstallment,
   MAX_INSTALLMENT_MONTHS,
   nowLocalDateTime,
   splitInstallment,
@@ -80,7 +81,8 @@ export function EntryForm({ data, kind: initialKind, transaction, canEdit, sugge
   const parents = data.categories.filter((c) => c.kind === kind && !c.parentId && visible(c));
   const children = data.categories.filter((c) => c.parentId === parentId && visible(c));
   const method = activeMethods.find((m) => m.id === paymentMethodId);
-  const isCard = kind === "expense" && method?.type === "card";
+  // 신용카드만 할부를 받는다. 체크카드와 현금은 일시불로 고정한다.
+  const isCard = kind === "expense" && allowsInstallment(method);
   const amountNumber = Number(amount) || 0;
   const label = KIND_LABEL[kind];
 
@@ -222,7 +224,7 @@ export function EntryForm({ data, kind: initialKind, transaction, canEdit, sugge
                   aria-invalid={!!errors.paymentMethodId}
                   onChange={(e) => {
                     setPaymentMethodId(e.target.value);
-                    if (activeMethods.find((m) => m.id === e.target.value)?.type === "cash") setInstallmentMonths(1);
+                    if (!allowsInstallment(activeMethods.find((m) => m.id === e.target.value))) setInstallmentMonths(1);
                   }}
                 >
                   <option value="" disabled>
@@ -236,7 +238,7 @@ export function EntryForm({ data, kind: initialKind, transaction, canEdit, sugge
                 </SelectControl>
                 {errors.paymentMethodId && <span className="field-error">{errors.paymentMethodId}</span>}
               </div>
-              {/* 현금이어도 자리를 지켜 수단을 바꿀 때 폼이 흔들리지 않게 한다. */}
+              {/* 할부가 안 되는 수단이어도 자리를 지켜 수단을 바꿀 때 폼이 흔들리지 않게 한다. */}
               <div className="field">
                 <label className="field-label" htmlFor="installment">
                   할부
