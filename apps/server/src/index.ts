@@ -8,7 +8,7 @@ const config = loadConfig();
 const { db } = createDb(config.databaseUrl);
 await runMigrations(db);
 const app = await buildApp({ db, config });
-await app.listen({ port: config.port, host: "0.0.0.0" });
+await app.listen({ port: config.port, host: config.host });
 
 // 주기 작업: 고정지출은 기동 시 놓친 달을 채우고 이후 10분마다 결제일이 된 항목을 만든다. 30일 지난 알림 이력도 정리한다.
 const RECURRING_INTERVAL_MS = 10 * 60 * 1000;
