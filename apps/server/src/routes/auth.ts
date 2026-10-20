@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { OAuth2Client } from "google-auth-library";
 import { SignJWT } from "jose";
 import { z } from "zod";
@@ -11,6 +11,11 @@ const SESSION_DAYS = 90;
 
 export function sessionKey(config: Config) {
   return new TextEncoder().encode(config.jwtSecret);
+}
+
+/** 터널(Cloudflare)을 거치지 않은 이 PC 내부 요청인지 확인한다. */
+function isLocalRequest(req: FastifyRequest) {
+  return !req.headers["cf-connecting-ip"] && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host ?? "");
 }
 
 export async function authRoutes(app: FastifyInstance, { db, config }: { db: Db; config: Config }) {
@@ -31,7 +36,7 @@ export async function authRoutes(app: FastifyInstance, { db, config }: { db: Db;
     return { token };
   }
 
-  app.get("/api/auth/config", async () => ({ googleClientId: config.googleClientId, devLogin: config.devLogin }));
+  app.get("/api/auth/config", async (req) => ({ googleClientId: config.googleClientId, devLogin: config.devLogin && isLocalRequest(req) }));
 
   app.post("/api/auth/google", async (req) => {
     if (!config.googleClientId) throw new HttpError(503, "구글 로그인이 아직 설정되지 않았습니다.");
@@ -44,9 +49,10 @@ export async function authRoutes(app: FastifyInstance, { db, config }: { db: Db;
     return upsertUser({ sub: p.sub, email: p.email, name: p.name ?? p.email.split("@")[0]!, avatarUrl: p.picture ?? null });
   });
 
-  // 구글 OAuth 클라이언트 등록 전 로컬 개발용. DEV_LOGIN=true 일 때만 열린다.
+  // 구글 OAuth 클라이언트 등록 전 로컬 개발용. DEV_LOGIN=true 이고 이 PC 내부 요청일 때만 열린다.
   if (config.devLogin) {
     app.post("/api/auth/dev", async (req) => {
+      if (!isLocalRequest(req)) throw new HttpError(404, "존재하지 않는 API입니다.");
       const { email, name } = parse(z.object({ email: z.string().email(), name: z.string().min(1) }), req.body);
       return upsertUser({ sub: `dev:${email}`, email, name, avatarUrl: null });
     });

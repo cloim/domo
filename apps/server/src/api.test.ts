@@ -97,3 +97,12 @@ describe("가계부 API", () => {
     expect((await owner("DELETE", `/api/payment-methods/${unused.id}`)).json()).toEqual({ archived: false });
   });
 });
+
+describe("개발용 로그인", () => {
+  it("터널을 거친 요청은 막는다", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/auth/dev", payload: { email: "x@test.com", name: "x" }, headers: { host: "domo.example.com", "cf-connecting-ip": "1.2.3.4" } });
+    expect(res.statusCode).toBe(404);
+    const cfg = await app.inject({ method: "GET", url: "/api/auth/config", headers: { host: "domo.example.com" } });
+    expect(cfg.json().devLogin).toBe(false);
+  });
+});

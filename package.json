@@ -11,7 +11,8 @@
     "build": "pnpm --filter @domo/web build",
     "start": "pnpm --filter @domo/server start",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "release:android": "node scripts/release-android.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

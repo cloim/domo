@@ -20,7 +20,7 @@ export const loginDev = (email: string, name: string) => exchange("/api/auth/dev
 /** 안드로이드 앱: Credential Manager로 구글 계정을 고르고 ID 토큰을 받는다. */
 export async function nativeGoogleLogin(webClientId: string) {
   await SocialLogin.initialize({ google: { webClientId, mode: "online" } });
-  const res = await SocialLogin.login({ provider: "google", options: { scopes: ["email", "profile"] } });
+  const res = await SocialLogin.login({ provider: "google", options: {} });
   const idToken = res.result && "idToken" in res.result ? res.result.idToken : null;
   if (!idToken) throw new Error("구글 로그인 정보를 받지 못했습니다.");
   await loginWithIdToken(idToken);

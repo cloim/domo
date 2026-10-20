@@ -1,0 +1,81 @@
+apply plugin: 'com.android.application'
+
+import groovy.json.JsonSlurper
+
+// 앱 버전은 저장소 루트 package.json 하나로 관리한다. 1.2.3 => versionCode 10203
+def appVersion = new JsonSlurper().parse(file('../../../../package.json')).version
+def (vMajor, vMinor, vPatch) = appVersion.tokenize('.').collect { it as int }
+
+// 서명 키는 저장소 외부 프로퍼티 파일(D:\Android\keystore.properties)에 두고 경로만 참조한다.
+def signingProps = new Properties()
+def signingFile = file(System.getenv('DOMO_SIGNING_PROPERTIES') ?: 'D:/Android/keystore.properties')
+if (signingFile.exists()) signingFile.withInputStream { signingProps.load(it) }
+
+android {
+    namespace = "com.cloimism.domo"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.cloimism.domo"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode vMajor * 10000 + vMinor * 100 + vPatch
+        versionName appVersion
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        domo {
+            if (signingProps.STORE_FILE_PATH) {
+                // 키 파일 이름을 속성 파일 폴더 기준으로 해석한다.
+                storeFile new File(signingFile.parentFile, new File(signingProps.STORE_FILE_PATH).name)
+                storePassword signingProps.PASSWORD
+                keyAlias signingProps.KEY_ALIAS
+                keyPassword signingProps.PASSWORD
+            }
+        }
+    }
+    buildTypes {
+        // 구글 로그인은 서명 SHA-1로 앱을 식별하므로 디버그도 같은 키로 서명한다.
+        debug {
+            signingConfig signingConfigs.domo
+        }
+        release {
+            signingConfig signingConfigs.domo
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
