@@ -266,6 +266,8 @@ textarea.input { height: auto; min-height: 72px; padding: 10px 12px; resize: ver
 .dialog-message { margin: 0; white-space: pre-line; }
 
 /* 아바타 메뉴 */
+/* 감싼 상자가 글자 줄 높이를 따르지 않게 flex로 두어 상단바 세로 가운데에 맞춘다. */
+.avatar-menu { position: relative; display: flex; align-items: center; }
 .avatar-btn { display: inline-flex; width: 36px; height: 36px; margin-left: 4px; overflow: hidden; border-radius: 50%; background: var(--sunken); }
 .avatar-btn img, .avatar { width: 100%; height: 100%; object-fit: cover; }
 .avatar-fallback { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--ink-2); font-weight: 700; font-size: 14px; }

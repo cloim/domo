@@ -20,7 +20,8 @@ export function AppShell({ me }: { me: Me }) {
           도모
         </Link>
         <nav className="side-nav" aria-label="주요 메뉴">
-          {NAV.map(({ to, label, icon: Icon }) => (
+          {/* 설정은 상단바 프로필 메뉴에 있으므로 사이드바에서는 뺀다. 모바일 하단 탭에는 엄지로 닿기 쉽게 남긴다. */}
+          {NAV.filter((n) => n.to !== "/settings").map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to}>
               <Icon size={19} aria-hidden="true" />
               {label}
@@ -95,7 +96,7 @@ function AvatarMenu({ me }: { me: Me }) {
   }, [open]);
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} className="avatar-menu">
       <button type="button" className="avatar-btn" aria-label="계정 메뉴" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <Avatar name={me.user.name} url={me.user.avatarUrl} />
       </button>
