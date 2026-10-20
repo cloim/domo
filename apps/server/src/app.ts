@@ -11,6 +11,7 @@ import { householdRoutes } from "./routes/household.ts";
 import { ledgerRoutes } from "./routes/ledger.ts";
 import { notifyRoutes } from "./routes/notify.ts";
 import { recurringRoutes } from "./routes/recurring.ts";
+import { familyRoutes } from "./routes/family.ts";
 
 const PUBLIC_API = new Set(["/api/health", "/api/auth/config", "/api/auth/google", "/api/auth/dev"]);
 
@@ -52,6 +53,7 @@ export async function buildApp({ db, config }: { db: Db; config: Config }) {
   await app.register(householdRoutes, { db, config });
   await app.register(ledgerRoutes, { db });
   await app.register(recurringRoutes, { db });
+  await app.register(familyRoutes, { db });
   await app.register(aiRoutes, { db, config });
   await app.register(notifyRoutes, { db, config });
 

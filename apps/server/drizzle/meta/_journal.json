@@ -57,6 +57,13 @@
       "when": 1792491905232,
       "tag": "0007_notification_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792533000000,
+      "tag": "0008_household_improvements",
+      "breakpoints": true
     }
   ]
 }

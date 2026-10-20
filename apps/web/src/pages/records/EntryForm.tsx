@@ -24,6 +24,8 @@ export type EntryPrefill = Pick<Transaction, "kind" | "amount" | "counterparty" 
 
 export interface Suggestion {
   counterparty: string;
+  kind?: TransactionKind;
+  amount?: number;
   categoryId: string;
   paymentMethodId: string | null;
 }
@@ -139,7 +141,7 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
     () => (isCard && installmentMonths > 1 && amountNumber > 0 ? splitInstallment(amountNumber, installmentMonths) : null),
     [isCard, installmentMonths, amountNumber],
   );
-  const kindSuggestions = suggestions.filter((s) => (kind === "expense" ? s.paymentMethodId : !s.paymentMethodId));
+  const kindSuggestions = suggestions.filter((s) => s.kind ? s.kind === kind : (kind === "expense" ? s.paymentMethodId : !s.paymentMethodId));
   const matchingSuggestions = kindSuggestions.filter((s) => s.counterparty.toLocaleLowerCase().includes(counterparty.trim().toLocaleLowerCase()));
   const showSuggestions = suggestionsOpen && matchingSuggestions.length > 0;
 
@@ -175,6 +177,15 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
 
   function pickSuggestion(value: string) {
     onCounterparty(value);
+    const hit = kindSuggestions.find((s) => s.counterparty === value);
+    if (hit) {
+      if (data.categories.some((c) => c.id === hit.categoryId && !c.archived)) {
+        setParentId(parentOf(hit.categoryId));
+        setCategoryId(hit.categoryId);
+      }
+      if (kind === "expense" && data.paymentMethods.some((m) => m.id === hit.paymentMethodId && !m.archived)) setPaymentMethodId(hit.paymentMethodId);
+      if (!amount && hit.amount) setAmount(String(hit.amount));
+    }
     counterpartyRef.current?.focus();
     setSuggestionsOpen(false);
     setSuggestionIndex(-1);

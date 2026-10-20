@@ -13,12 +13,18 @@ import { BrowserRouter } from "react-router";
 import { App } from "./App.tsx";
 import { DialogProvider } from "./components/Dialogs.tsx";
 import { UpdatePromptProvider } from "./UpdatePrompt.tsx";
+import { installCache } from "./lib/cache.ts";
+import { Capacitor } from "@capacitor/core";
+
+if (import.meta.env.PROD && !Capacitor.isNativePlatform() && "serviceWorker" in navigator) {
+  void navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } },
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 30_000, gcTime: 24 * 60 * 60 * 1000 } },
 });
 
-createRoot(document.getElementById("root")!).render(
+void installCache(queryClient).then(() => createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -30,4 +36,4 @@ createRoot(document.getElementById("root")!).render(
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,
-);
+));

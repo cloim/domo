@@ -20,6 +20,7 @@ import { Bar, Doughnut } from "react-chartjs-2";
 import { useOutletContext } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
 import { MonthSwitch } from "../../components/MonthSwitch.tsx";
+import { InkCalendar } from "../../components/InkCalendar.tsx";
 import { formatShortDate, formatWon, formatWonShort } from "../../lib/format.ts";
 import { useHousehold, useTransactions, type Me } from "../../lib/queries.ts";
 import { useCardBills } from "../../lib/useCardBills.ts";
@@ -139,6 +140,7 @@ export function StatsPage() {
                 <div className="stats-grid">
                   <CategoryPanel stats={stats} />
                   <TimelinePanel stats={stats} />
+                  {mode === "month" && kind === "expense" && <InkCalendar month={month} daily={stats.daily} />}
                   <BarPanel title="구성원별" slices={stats.byMember} useOwnColor />
                   {kind === "expense" && <BarPanel title="지출수단별" slices={stats.byPaymentMethod} showAmounts />}
                   {kind === "expense" && <CardBillsPanel />}

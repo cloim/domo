@@ -1,20 +1,42 @@
-import { ChartPie, ChevronRight, LogOut, NotebookPen, Settings } from "lucide-react";
+import { CalendarDays, ChartPie, ChevronRight, LogOut, MessageCircle, NotebookPen, Settings } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { signOut } from "../lib/auth.ts";
 import { useHousehold, type Me } from "../lib/queries.ts";
 import { NotifyStatus } from "./NotifyStatus.tsx";
 import logoUrl from "../assets/logo.svg";
+import { api } from "../lib/api.ts";
+import { useFamily } from "../lib/family.ts";
+import { useQueryClient } from "@tanstack/react-query";
+import { WidgetSync } from "./WidgetSync.tsx";
+import { widgetSupported } from "../lib/widget.ts";
 
 const NAV = [
   { to: "/records", label: "입출기록", icon: NotebookPen },
+  { to: "/plan", label: "생활비 계획", icon: CalendarDays },
   { to: "/stats", label: "통계", icon: ChartPie },
+  { to: "/family", label: "가족 소식", icon: MessageCircle },
   { to: "/settings", label: "설정", icon: Settings },
 ];
 
 export function AppShell({ me }: { me: Me }) {
+  const [offline, setOffline] = useState(!navigator.onLine);
+  const qc = useQueryClient();
+  const feed = useFamily();
+  useEffect(() => {
+    const status = () => setOffline(!navigator.onLine);
+    window.addEventListener("online", status); window.addEventListener("offline", status);
+    return () => { window.removeEventListener("online", status); window.removeEventListener("offline", status); };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const check = () => { if (navigator.onLine) void api("/api/budgets/check", { method: "POST" }).then(() => { if (active) void qc.invalidateQueries({ queryKey: ["family"] }); }).catch(() => {}); };
+    check(); const interval = setInterval(check, 60_000);
+    return () => { active = false; clearInterval(interval); };
+  }, [qc]);
   return (
     <div className="shell">
+      {widgetSupported && <WidgetSync />}
       <aside className="sidebar">
         <Link to="/records" className="brand" aria-label="도모 홈">
           <img src={logoUrl} alt="" className="brand-mark" />
@@ -31,12 +53,14 @@ export function AppShell({ me }: { me: Me }) {
         </nav>
       </aside>
       <div className="main">
+        {offline && <div className="offline-status" role="status">오프라인 | 마지막으로 불러온 내역을 보고 있어요. 저장하려면 인터넷에 연결해 주세요.</div>}
         <Outlet context={me} />
         <nav className="bottom-nav" aria-label="주요 메뉴">
           {NAV.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to}>
               <Icon size={22} aria-hidden="true" />
               {label}
+              {to === "/family" && !!feed.data?.alerts.length && <span className="nav-count" aria-label={`예산 알림 ${feed.data.alerts.length}건`}>{feed.data.alerts.length}</span>}
             </NavLink>
           ))}
         </nav>

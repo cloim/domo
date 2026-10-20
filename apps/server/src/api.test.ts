@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.ts";
 import { createDb, runMigrations } from "./db/client.ts";
 import { generateRecurring } from "./routes/recurring.ts";
+import { nowLocalDateTime } from "@domo/core";
 
 const { db, close } = createDb(process.env.TEST_DATABASE_URL ?? "postgres://domo:domo@localhost:5434/domo_test");
 let app: FastifyInstance;
@@ -364,5 +365,66 @@ describe("개발용 로그인", () => {
     expect(res.statusCode).toBe(404);
     const cfg = await app.inject({ method: "GET", url: "/api/auth/config", headers: { host: "domo.example.com" } });
     expect(cfg.json().devLogin).toBe(false);
+  });
+});
+
+describe("예산과 가족 소식", () => {
+  it("가계 격리, 댓글 작성자 권한, 반응 갱신, 예산 중복 알림과 전체 기간 추천을 검증한다", async () => {
+    const owner = await login("family-owner@test.com", "가족 대표");
+    const member = await login("family-member@test.com", "가족 구성원");
+    const outsider = await login("family-outsider@test.com", "다른 가계");
+    await owner("POST", "/api/households", { name: "소식 테스트" });
+    await outsider("POST", "/api/households", { name: "별도 가계" });
+    const invite = (await owner("POST", "/api/invites")).json();
+    await member("POST", "/api/join", { code: invite.code });
+    const base = (await owner("GET", "/api/household")).json();
+    const parent = base.categories.find((c: { name: string; parentId: string | null }) => c.name === "식비" && !c.parentId);
+    const child = base.categories.find((c: { parentId: string }) => c.parentId === parent.id);
+    const month = nowLocalDateTime().slice(0, 7);
+    const input = { kind: "expense", paymentMethodId: base.paymentMethods[0].id, counterparty: "추천 마트", memo: "가족 장보기", amount: 80000, installmentMonths: 1, categoryId: child.id, occurredAt: `${month}-01T10:00` };
+    const created = (await owner("POST", "/api/transactions", input)).json();
+    expect((await member("PUT", "/api/budgets", { month, categoryId: parent.id, amount: 100000 })).statusCode).toBe(200);
+    expect((await outsider("PUT", "/api/budgets", { month, categoryId: parent.id, amount: 100000 })).statusCode).toBe(400);
+    expect((await member("PUT", "/api/budgets", { month, categoryId: child.id, amount: 100000 })).statusCode).toBe(400);
+    await owner("POST", "/api/budgets/check"); await member("POST", "/api/budgets/check");
+    let feed = (await member("GET", "/api/family")).json();
+    expect(feed.alerts).toHaveLength(1); expect(feed.alerts[0].spent).toBe(80000);
+    expect((await outsider("GET", "/api/family")).json().alerts).toHaveLength(0);
+    const comment = (await member("POST", `/api/transactions/${created.id}/comments`, { body: "고마워요!" })).json();
+    const ownerComment = (await owner("POST", `/api/transactions/${created.id}/comments`, { body: "확인했어요" })).json();
+    expect((await member("DELETE", `/api/comments/${ownerComment.id}`)).statusCode).toBe(403);
+    expect((await outsider("POST", `/api/transactions/${created.id}/comments`, { body: "다른 가계" })).statusCode).toBe(404);
+    expect((await outsider("DELETE", `/api/comments/${comment.id}`)).statusCode).toBe(404);
+    expect((await outsider("PUT", `/api/transactions/${created.id}/reaction`, { reaction: "like" })).statusCode).toBe(404);
+    expect((await member("POST", `/api/transactions/${created.id}/comments`, { body: " " })).statusCode).toBe(400);
+    await member("PUT", `/api/transactions/${created.id}/reaction`, { reaction: "like" });
+    await member("PUT", `/api/transactions/${created.id}/reaction`, { reaction: "thanks" });
+    feed = (await owner("GET", "/api/family")).json();
+    expect(feed.comments).toHaveLength(2); expect(feed.reactions).toHaveLength(1); expect(feed.reactions[0].reaction).toBe("thanks");
+    expect((await outsider("GET", "/api/transactions/all")).json()).toHaveLength(0);
+    await owner("POST", "/api/transactions", { ...input, occurredAt: "2025-01-31T12:00", amount: 15000 });
+    const suggestions = (await member("GET", "/api/transactions/suggestions")).json();
+    expect(suggestions[0]).toMatchObject({ counterparty: "추천 마트", amount: 80000, frequency: 2, kind: "expense" });
+    expect((await outsider("GET", "/api/transactions/suggestions")).json()).toHaveLength(0);
+    expect((await owner("DELETE", `/api/comments/${comment.id}`)).statusCode).toBe(200);
+    await owner("DELETE", `/api/transactions/${created.id}`);
+    feed = (await owner("GET", "/api/family")).json();
+    expect(feed.comments).toHaveLength(0); expect(feed.reactions).toHaveLength(0);
+    await owner("PUT", "/api/budgets", { month, categoryId: parent.id, amount: 0 });
+    expect((await owner("GET", `/api/budgets?month=${month}`)).json()).toHaveLength(0);
+  });
+
+  it("할부 마지막 날짜가 말일과 수정 이후에도 조회 범위를 지킨다", async () => {
+    const owner = await login("index-owner@test.com", "할부 검증");
+    await owner("POST", "/api/households", { name: "할부 검증" });
+    const base = (await owner("GET", "/api/household")).json();
+    const card = (await owner("POST", "/api/payment-methods", cardInput())).json();
+    const child = base.categories.find((c: { kind: string; parentId: string | null }) => c.kind === "expense" && c.parentId);
+    const input = { kind: "expense", paymentMethodId: card.id, counterparty: "말일 할부", memo: null, amount: 10001, installmentMonths: 2, categoryId: child.id, occurredAt: "2026-01-31T22:30" };
+    const t = (await owner("POST", "/api/transactions", input)).json();
+    expect((await owner("GET", "/api/transactions?start=2026-02-28&end=2026-02-28")).json().map((x: { id: string }) => x.id)).toContain(t.id);
+    expect((await owner("GET", "/api/transactions?start=2026-03-01&end=2026-03-31")).json()).toHaveLength(0);
+    await owner("PATCH", `/api/transactions/${t.id}`, { ...input, installmentMonths: 3 });
+    expect((await owner("GET", "/api/transactions?start=2026-03-31&end=2026-03-31")).json().map((x: { id: string }) => x.id)).toContain(t.id);
   });
 });

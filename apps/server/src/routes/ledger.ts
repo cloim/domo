@@ -56,7 +56,7 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
     const rows = await executor.select().from(transactions).where(and(
       eq(transactions.householdId, householdId),
       lte(transactions.occurredAt, `${end} 23:59:59`),
-      gte(sql`${transactions.occurredAt} + make_interval(months => ${transactions.installmentMonths} - 1)`, sql`${start}::timestamp`),
+      gte(transactions.lastInstallmentAt, `${start} 00:00:00`),
     ));
     const entries = expandEntries(rows.map(toDto), { start, end });
     const period = monthRange(month);
@@ -145,13 +145,31 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
         and(
           eq(transactions.householdId, me.householdId),
           lte(transactions.occurredAt, `${end} 23:59:59`),
-          gte(sql`${transactions.occurredAt} + make_interval(months => ${transactions.installmentMonths} - 1)`, sql`${start}::timestamp`),
+          gte(transactions.lastInstallmentAt, `${start} 00:00:00`),
         ),
       );
     return rows.map(toDto);
   });
 
   /** 같은 거래처의 가장 최근 기록으로 분류와 지출수단을 추천한다(알림 등록 화면용). */
+  app.get("/api/transactions/all", async (req) => {
+    const me = await requireMember(db, req);
+    return (await db.select().from(transactions).where(eq(transactions.householdId, me.householdId)).orderBy(desc(transactions.occurredAt))).map(toDto);
+  });
+
+  app.get("/api/transactions/suggestions", async (req) => {
+    const me = await requireMember(db, req);
+    const rows = await db.select().from(transactions).where(eq(transactions.householdId, me.householdId)).orderBy(desc(transactions.occurredAt), desc(transactions.createdAt));
+    const found = new Map<string, { counterparty: string; kind: "expense" | "income"; categoryId: string; paymentMethodId: string | null; amount: number; frequency: number; recent: string }>();
+    for (const t of rows) {
+      const key = `${t.kind}:${t.counterparty}`;
+      const previous = found.get(key);
+      if (previous) previous.frequency++;
+      else found.set(key, { counterparty: t.counterparty, kind: t.kind, categoryId: t.categoryId, paymentMethodId: t.paymentMethodId, amount: t.amount, frequency: 1, recent: t.occurredAt });
+    }
+    return [...found.values()].sort((a, b) => b.frequency - a.frequency || b.recent.localeCompare(a.recent));
+  });
+
   app.get("/api/transactions/suggest", async (req) => {
     const me = await requireMember(db, req);
     const { counterparty, kind } = parse(z.object({ counterparty: z.string().trim().min(1).max(60), kind: z.enum(["expense", "income"]) }), req.query);

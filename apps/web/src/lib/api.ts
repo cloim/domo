@@ -21,8 +21,10 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  if (init.method && init.method !== "GET" && !navigator.onLine) throw new ApiError(0, "인터넷에 연결한 뒤 다시 저장해 주세요.");
   const token = session.get();
   let res: Response;
+  const requestSession = session.get();
   try {
     res = await fetch(`${API_BASE}${path}`, {
       method: init.method ?? "GET",
@@ -37,7 +39,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   }
   const data = res.headers.get("content-type")?.includes("json") ? await res.json() : null;
   if (!res.ok) {
-    if (res.status === 401) {
+    if (res.status === 401 && requestSession === session.get()) {
       session.clear();
       window.dispatchEvent(new Event("domo:signed-out"));
     }

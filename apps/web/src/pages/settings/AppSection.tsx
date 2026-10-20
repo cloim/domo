@@ -64,6 +64,13 @@ export function AppSection() {
           )}
         </ul>
       </section>
+      {native && <section>
+        <div className="section-head"><h2>빠른 기록</h2></div>
+        <ul className="list">
+          <li><span className="list-main"><strong>홈 화면 위젯</strong><span>홈 화면의 빈 곳을 길게 눌러 위젯에서 도모를 추가해 주세요. 앱에서 불러온 월 잔액과 기준 시각을 표시합니다.</span></span></li>
+          <li><span className="list-main"><strong>빠른 설정 타일</strong><span>상단 빠른 설정의 편집에서 도모 기록을 추가하면 입력 화면을 바로 열 수 있어요.</span></span></li>
+        </ul>
+      </section>}
       <section>
         <button type="button" className="btn btn-ghost" onClick={() => void signOut()}>
           <LogOut size={17} aria-hidden="true" /> 로그아웃

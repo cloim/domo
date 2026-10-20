@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -p . && vite build",
     "typecheck": "tsc -p .",
-    "test": "echo no web tests"
+    "test": "vitest run"
   },
   "dependencies": {
     "@capacitor-mlkit/barcode-scanning": "^8.2.1",

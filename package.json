@@ -1,7 +1,7 @@
 {
   "name": "domo",
   "private": true,
-  "version": "0.3.5",
+  "version": "0.4.0",
   "type": "module",
   "packageManager": "pnpm@10.33.2",
   "scripts": {
@@ -9,6 +9,7 @@
     "dev:server": "pnpm --filter @domo/server dev",
     "dev:web": "pnpm --filter @domo/web dev",
     "build": "pnpm --filter @domo/web build",
+    "build:check": "pnpm --filter @domo/web typecheck && pnpm --filter @domo/web exec vite build --outDir ../../release/web-check --emptyOutDir",
     "start": "pnpm --filter @domo/server start",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",

@@ -16,15 +16,21 @@ import logoUrl from "./assets/logo.svg";
 
 // 차트 라이브러리는 통계 화면에서만 쓰므로 따로 불러온다.
 const StatsPage = lazy(() => import("./pages/stats/StatsPage.tsx").then((m) => ({ default: m.StatsPage })));
+const PlanPage = lazy(() => import("./pages/stats/PlanPage.tsx").then((m) => ({ default: m.PlanPage })));
+const SearchPage = lazy(() => import("./pages/records/SearchPage.tsx").then((m) => ({ default: m.SearchPage })));
+const FamilyPage = lazy(() => import("./pages/records/FamilyPage.tsx").then((m) => ({ default: m.FamilyPage })));
 
 export function App() {
   const [signedIn, setSignedIn] = useState(() => !!session.get());
+  const [accountVersion, setAccountVersion] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
     const onOut = () => setSignedIn(false);
+    const onAccount = () => { setSignedIn(!!session.get()); setAccountVersion((n) => n + 1); };
     window.addEventListener("domo:signed-out", onOut);
-    return () => window.removeEventListener("domo:signed-out", onOut);
+    window.addEventListener("domo:session-changed", onAccount);
+    return () => { window.removeEventListener("domo:signed-out", onOut); window.removeEventListener("domo:session-changed", onAccount); };
   }, []);
 
   return (
@@ -43,7 +49,7 @@ export function App() {
           }
         />
       ) : (
-        <Route path="*" element={<SignedIn />} />
+        <Route path="*" element={<SignedIn key={accountVersion} />} />
       )}
     </Routes>
   );
@@ -63,6 +69,12 @@ function SignedIn() {
   const navigate = useNavigate();
 
   // 등록 알림을 누르면 채워진 입력 화면으로 보낸다. 앱이 꺼져 있다가 열린 경우도 플러그인이 보관해 두었다가 전달한다.
+  useEffect(() => {
+    const open = (url?: string) => { if (url === "domo://records/new") navigate("/records?new=1"); };
+    void CapApp.getLaunchUrl().then((value) => open(value?.url)).catch(() => {});
+    const listener = CapApp.addListener("appUrlOpen", (event) => open(event.url));
+    return () => void listener.then((h) => h.remove());
+  }, [navigate]);
   useEffect(() => {
     if (!notifySupported) return;
     const handle = DomoNotify.addListener("prefill", (prefill) => navigate("/records", { state: { prefill } }));
@@ -85,7 +97,7 @@ function SignedIn() {
   }, [qc]);
 
   if (me.isPending) return <Splash />;
-  if (me.isError) {
+  if (me.isError && !me.data) {
     return (
       <main className="gate">
         <div className="empty" role="alert">
@@ -108,6 +120,9 @@ function SignedIn() {
       <Route element={<AppShell me={me.data} />}>
         <Route path="/records" element={<RecordsPage />} />
         <Route path="/stats" element={<Suspense fallback={null}><StatsPage /></Suspense>} />
+        <Route path="/plan" element={<Suspense fallback={null}><PlanPage /></Suspense>} />
+        <Route path="/search" element={<Suspense fallback={null}><SearchPage /></Suspense>} />
+        <Route path="/family" element={<Suspense fallback={null}><FamilyPage /></Suspense>} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/:section" element={<SettingsPage />} />
       </Route>

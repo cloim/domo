@@ -19,7 +19,20 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="domo" android:host="records" android:path="/new" />
+            </intent-filter>
         </activity>
+        <receiver android:name=".widget.DomoWidgetProvider" android:exported="false" android:label="도모 월 잔액">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/domo_widget_info" />
+        </receiver>
+        <service android:name=".widget.DomoRecordTile" android:label="도모 기록" android:icon="@drawable/ic_record_tile" android:exported="true" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+        </service>
 
         <!-- 다른 앱의 알림을 읽어 지출, 수입 등록 알림을 띄운다. 사용자가 시스템 설정에서 허용해야 동작한다. -->
         <service

@@ -11,3 +11,4 @@ export * from "./recurringHistory.ts";
 export * from "./notifyTemplate.ts";
 export * from "./ai.ts";
 export * from "./notifySync.ts";
+export * from "./insights.ts";

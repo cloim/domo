@@ -172,11 +172,44 @@ export const transactions = pgTable(
     categoryId: uuid("category_id").notNull().references(() => categories.id),
     /** 가족이 사는 지역의 벽시계 시각 */
     occurredAt: timestamp("occurred_at", { mode: "string" }).notNull(),
+    lastInstallmentAt: timestamp("last_installment_at", { mode: "string" }).generatedAlwaysAs(sql`occurred_at + MAKE_INTERVAL(months => installment_months - 1)`),
     recurringId: uuid("recurring_id").references((): AnyPgColumn => recurringExpenses.id, { onDelete: "set null" }),
     settlementMethodId: uuid("settlement_method_id").references(() => paymentMethods.id),
     settlementMonth: text("settlement_month"),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => sql`now()`),
   },
-  (t) => [index("transactions_household_occurred_idx").on(t.householdId, t.occurredAt), uniqueIndex("transactions_settlement_uq").on(t.settlementMethodId, t.settlementMonth)],
+  (t) => [index("transactions_household_occurred_idx").on(t.householdId, t.occurredAt), index("transactions_household_last_installment_idx").on(t.householdId, t.lastInstallmentAt), uniqueIndex("transactions_settlement_uq").on(t.settlementMethodId, t.settlementMonth)],
 );
+
+export const budgets = pgTable("budgets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+  month: text("month").notNull(),
+  categoryId: uuid("category_id").notNull().references(() => categories.id),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+}, (t) => [uniqueIndex("budgets_household_month_category_uq").on(t.householdId, t.month, t.categoryId)]);
+
+export const transactionComments = pgTable("transaction_comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  transactionId: uuid("transaction_id").notNull().references(() => transactions.id, { onDelete: "cascade" }),
+  memberId: uuid("member_id").notNull().references(() => householdMembers.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  createdAt: createdAt(),
+}, (t) => [index("transaction_comments_transaction_idx").on(t.transactionId)]);
+
+export const transactionReactions = pgTable("transaction_reactions", {
+  transactionId: uuid("transaction_id").notNull().references(() => transactions.id, { onDelete: "cascade" }),
+  memberId: uuid("member_id").notNull().references(() => householdMembers.id, { onDelete: "cascade" }),
+  reaction: text("reaction").notNull(),
+}, (t) => [uniqueIndex("transaction_reactions_member_uq").on(t.transactionId, t.memberId)]);
+
+export const budgetAlerts = pgTable("budget_alerts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+  month: text("month").notNull(),
+  categoryId: uuid("category_id").notNull().references(() => categories.id),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  spent: bigint("spent", { mode: "number" }).notNull(),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("budget_alerts_month_category_uq").on(t.householdId, t.month, t.categoryId)]);

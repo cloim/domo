@@ -11,17 +11,18 @@ import {
   type TransactionKind,
   type YearMonth,
 } from "@domo/core";
-import { CreditCard, NotebookPen, Plus } from "lucide-react";
+import { CreditCard, NotebookPen, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useOutletContext, useSearchParams } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
 import { MonthSwitch } from "../../components/MonthSwitch.tsx";
 import { Sheet } from "../../components/Sheet.tsx";
 import { formatTime, formatWon, isWeekend, weekdayOf } from "../../lib/format.ts";
-import { useHousehold, useTransactions, type HouseholdData, type Me } from "../../lib/queries.ts";
+import { useHousehold, useTransactions, useSuggestions, type HouseholdData, type Me } from "../../lib/queries.ts";
 import { useMedia, WIDE_EDITOR } from "../../lib/useMedia.ts";
 import { EntryForm, type EntryPrefill, type Suggestion } from "./EntryForm.tsx";
 import { CardSettlementDialog } from "./CardSettlementDialog.tsx";
+import { RecordBudgets } from "../../components/RecordBudgets.tsx";
 
 const KINDS: { kind: TransactionKind; label: string }[] = [
   { kind: "expense", label: "지출" },
@@ -37,6 +38,7 @@ export function RecordsPage() {
 
   const household = useHousehold();
   const txs = useTransactions(range);
+  const historySuggestions = useSuggestions();
   const wide = useMedia(WIDE_EDITOR);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -63,26 +65,41 @@ export function RecordsPage() {
 
   const entries = useMemo(() => expandEntries(txs.data ?? [], range), [txs.data, range]);
   const totals = useMemo(() => summarizeEntries(entries, household.data ?? { categories: [], paymentMethods: [] }), [entries, household.data]);
-  const groups = useMemo(() => groupByDay(entries.filter((e) => e.transaction.kind === kind)), [entries, kind]);
+  const day = params.get("day");
+  const groups = useMemo(() => groupByDay(entries.filter((e) => e.transaction.kind === kind && (!day || e.occurredAt.slice(0, 10) === day))), [entries, kind, day]);
   const suggestions = useMemo<Suggestion[]>(() => {
     const seen = new Map<string, Suggestion>();
     for (const t of [...(txs.data ?? [])].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))) {
       if (!seen.has(t.counterparty)) seen.set(t.counterparty, { counterparty: t.counterparty, categoryId: t.categoryId, paymentMethodId: t.paymentMethodId });
     }
-    return [...seen.values()];
-  }, [txs.data]);
+    return historySuggestions.data ?? [...seen.values()];
+  }, [txs.data, historySuggestions.data]);
 
   const selected = (txs.data ?? []).find((t) => t.id === selectedId) ?? null;
 
   const update = (next: { m?: YearMonth; tab?: TransactionKind }) => {
     const p = new URLSearchParams(params);
     if (next.m) p.set("m", next.m);
+    p.delete("entry"); p.delete("day");
     if (next.tab) p.set("tab", next.tab);
     setParams(p, { replace: true });
   };
 
   // 달이나 탭을 바꾸면 고르던 기록을 놓는다.
   useEffect(() => setSelectedId(null), [month, kind]);
+  useEffect(() => {
+    const id = params.get("entry");
+    if (id && txs.data?.some((t) => t.id === id)) {
+      setSelectedId(id);
+      if (!wide) setSheetOpen(true);
+      const next = new URLSearchParams(params); next.delete("entry"); setParams(next, { replace: true });
+    }
+    if (params.get("new") === "1") {
+      setSelectedId(null);
+      if (!wide) setSheetOpen(true);
+      const next = new URLSearchParams(params); next.delete("new"); setParams(next, { replace: true });
+    }
+  }, [params, txs.data, wide, setParams]);
 
   function openEntry(id: string | null) {
     setPrefill(null);
@@ -111,7 +128,7 @@ export function RecordsPage() {
 
   return (
     <>
-      <TopBar title="입출기록" me={me} actions={<button type="button" className="icon-btn" title="카드 정산" aria-label="카드 정산" onClick={() => setSettlementOpen(true)}><CreditCard size={20} aria-hidden="true" /></button>} />
+      <TopBar title="입출기록" me={me} actions={<><button type="button" className="icon-btn" title="기록 검색" aria-label="기록 검색" onClick={() => navigate("/search")}><Search size={20} /></button><button type="button" className="icon-btn" title="카드 정산" aria-label="카드 정산" onClick={() => setSettlementOpen(true)}><CreditCard size={20} aria-hidden="true" /></button></>} />
       <div className="content">
         <div className="records">
           <section className="ledger" aria-label="입출 내역">
@@ -146,11 +163,12 @@ export function RecordsPage() {
                     <span>월 잔액 <strong className="num">{formatWon(totals.balance)}원</strong></span>
                   </>}
                 </div>
+                {data && txs.data && <RecordBudgets month={month} transactions={txs.data} household={data} />}
               </div>
-
+              {day && <button type="button" className="btn btn-ghost" onClick={() => { const p = new URLSearchParams(params); p.delete("day"); setParams(p); }}>{day} 선택 해제 <X size={15} /></button>}
               {txs.isPending || !data ? (
                 <LedgerSkeleton />
-              ) : txs.isError ? (
+              ) : txs.isError && !txs.data ? (
                 <div className="empty" role="alert">
                   <strong>내역을 불러오지 못했어요</strong>
                   <span>{(txs.error as Error).message}</span>
