@@ -431,6 +431,15 @@ textarea.input { height: auto; min-height: 72px; padding: 10px 12px; resize: ver
 /* ───── 통계 ───── */
 .page { max-width: 1120px; margin: 0 auto; padding: 16px var(--gutter) 40px; }
 .stats-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.stats-tab-controls { display: flex; flex: none; align-items: center; gap: 10px; max-width: 100%; overflow-x: auto; }
+.stats-tab-controls > .segmented { flex: none; }
+@media (max-width: 600px) {
+  .stats-basis-suffix { display: none; }
+}
+@media (max-width: 400px) {
+  .stats-tab-controls { gap: 6px; }
+  .stats-tab-controls .segmented button { padding-inline: 4px; font-size: 13px; }
+}
 .stats-controls .period { display: flex; align-items: center; gap: 4px; }
 .stats-controls .period-label { min-width: 120px; font-family: var(--font-display); font-size: 18px; font-weight: 700; text-align: center; }
 .range-inputs { display: flex; align-items: center; gap: 6px; }

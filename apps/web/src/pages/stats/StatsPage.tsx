@@ -56,26 +56,28 @@ export function StatsPage() {
       <div className="content">
         <div className="page">
           <div className="stats-controls">
-            <div className="segmented" role="group" aria-label="종류">
-              <button type="button" aria-pressed={kind === "expense"} onClick={() => setKind("expense")}>
-                지출
-              </button>
-              <button type="button" aria-pressed={kind === "income"} onClick={() => setKind("income")}>
-                수입
-              </button>
+            <div className="stats-tab-controls">
+              <div className="segmented" role="group" aria-label="종류">
+                <button type="button" aria-pressed={kind === "expense"} onClick={() => setKind("expense")}>
+                  지출
+                </button>
+                <button type="button" aria-pressed={kind === "income"} onClick={() => setKind("income")}>
+                  수입
+                </button>
+              </div>
+              <div className="segmented" role="group" aria-label="조회 단위">
+                <button type="button" aria-pressed={mode === "month"} onClick={() => setMode("month")}>
+                  월
+                </button>
+                <button type="button" aria-pressed={mode === "range"} onClick={() => setMode("range")}>
+                  기간
+                </button>
+              </div>
+              {kind === "expense" && <div className="segmented" role="group" aria-label="지출 집계 기준">
+                <button type="button" aria-label="사용 기준" aria-pressed={basis === "usage"} onClick={() => setBasis("usage")}>사용<span className="stats-basis-suffix"> 기준</span></button>
+                <button type="button" aria-label="출금 기준" aria-pressed={basis === "cash"} onClick={() => setBasis("cash")}>출금<span className="stats-basis-suffix"> 기준</span></button>
+              </div>}
             </div>
-            <div className="segmented" role="group" aria-label="조회 단위">
-              <button type="button" aria-pressed={mode === "month"} onClick={() => setMode("month")}>
-                월
-              </button>
-              <button type="button" aria-pressed={mode === "range"} onClick={() => setMode("range")}>
-                기간
-              </button>
-            </div>
-            {kind === "expense" && <div className="segmented" role="group" aria-label="지출 집계 기준">
-              <button type="button" aria-pressed={basis === "usage"} onClick={() => setBasis("usage")}>사용 기준</button>
-              <button type="button" aria-pressed={basis === "cash"} onClick={() => setBasis("cash")}>출금 기준</button>
-            </div>}
             {mode === "month" ? (
               <MonthSwitch value={month} onChange={setMonth} />
             ) : (
