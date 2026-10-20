@@ -7,6 +7,11 @@ import java.security.MessageDigest;
 public final class NotifyEvent {
     private NotifyEvent() {}
 
+    /** 금액 등 숫자를 포함한 본문만 알림 기록 대상으로 삼는다. */
+    public static boolean shouldCapture(String body) {
+        return body.codePoints().anyMatch(Character::isDigit);
+    }
+
     public static String key(String pkg, String notificationKey, long eventAt, long messageAt, String title, String message) {
         String identity = messageAt > 0
             ? "message\n" + pkg + "\n" + title + "\n" + messageAt + "\n" + message

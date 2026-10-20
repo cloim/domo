@@ -60,7 +60,7 @@ public class DomoNotificationListener extends NotificationListenerService {
         String rawText = text(extras.getCharSequence(Notification.EXTRA_TEXT));
         String bigText = text(extras.getCharSequence(Notification.EXTRA_BIG_TEXT));
         String body = bigText.isEmpty() ? rawText : bigText;
-        if (title.isEmpty() && body.isEmpty()) return;
+        if (!NotifyEvent.shouldCapture(body)) return;
 
         long postedAt = sbn.getPostTime();
         long messageAt = 0;

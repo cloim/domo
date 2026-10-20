@@ -619,6 +619,12 @@ button.rank-row:hover { background: var(--hover); }
 .timeline > li.hint { padding: 14px; }
 
 /* 알림 연동 */
+.notify-detail { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+.notify-detail > .md-detail-body { flex: 1; min-height: 0; overflow-y: auto; }
+.notify-detail > .md-detail-body > .field:first-child { flex: none; }
+.notify-history { flex: 1; min-height: 120px; }
+.notify-history > .field-label { flex: none; }
+.notify-history > .notify-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
 .app-icon { flex: none; width: 34px; height: 34px; border-radius: 9px; }
 .notify-alert { display: flex; gap: 10px; padding: 12px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--ink); }
 .notify-alert svg { flex: none; margin-top: 2px; color: var(--accent); }

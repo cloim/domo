@@ -230,7 +230,7 @@ function TargetDetail({ source, target, icon, onBack, onUpdate, onRemove }: Deta
   const templateName = (id: string | null) => templates.data?.find((t) => t.id === id)?.name;
 
   return (
-    <div style={{ display: "flex", flex: 1, flexDirection: "column" }}>
+    <div className="notify-detail">
       <div className="md-detail-head">
         <button type="button" className="icon-btn md-back" aria-label="목록으로" onClick={onBack}>
           <ChevronLeft size={20} aria-hidden="true" />
@@ -261,7 +261,7 @@ function TargetDetail({ source, target, icon, onBack, onUpdate, onRemove }: Deta
           </div>
         </div>
 
-        <section className="field" aria-labelledby="notify-recent">
+        <section className="field notify-history" aria-labelledby="notify-recent">
           <h3 id="notify-recent" className="field-label" style={{ margin: 0 }}>
             최근 알림
           </h3>
@@ -274,7 +274,7 @@ function TargetDetail({ source, target, icon, onBack, onUpdate, onRemove }: Deta
           ) : (notifications.data ?? []).length === 0 ? (
             <p className="hint">아직 받은 알림이 없어요. 이 앱에서 알림이 오면 여기에 쌓입니다(최근 30일).</p>
           ) : (
-            <ul className="notify-list">
+            <ul className="notify-list" tabIndex={0} aria-labelledby="notify-recent">
               {notifications.data!.map((n) => (
                 <li key={n.id}>
                   <div className="notify-body">
