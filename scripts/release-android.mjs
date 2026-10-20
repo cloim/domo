@@ -16,14 +16,15 @@ const dryRun = args.includes("--dry-run");
 const notesIndex = args.indexOf("--notes");
 const notes = notesIndex >= 0 ? args[notesIndex + 1] : `도모 ${tag}`;
 
-const run = (cmd, cmdArgs, cwd) => {
+// Windows의 .cmd/.bat(pnpm, npx, gradlew)은 셸이 필요하고, 셸을 쓰면 띄어쓰기 인수가 쪼개지므로 gh 같은 실행 파일은 셸 없이 부른다.
+const run = (cmd, cmdArgs, cwd, shell = process.platform === "win32") => {
   console.log(`> ${cmd} ${cmdArgs.join(" ")}`);
-  execFileSync(cmd, cmdArgs, { cwd, stdio: ["ignore", "inherit", "inherit"], shell: process.platform === "win32" });
+  execFileSync(cmd, cmdArgs, { cwd, stdio: ["ignore", "inherit", "inherit"], shell });
 };
 
 const existing = (() => {
   try {
-    execFileSync("gh", ["release", "view", tag, "--repo", "cloim/domo"], { stdio: "ignore", shell: process.platform === "win32" });
+    execFileSync("gh", ["release", "view", tag, "--repo", "cloim/domo"], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -44,5 +45,5 @@ console.log(`APK: ${apk}`);
 if (dryRun) {
   console.log("dry-run: 릴리스 업로드를 건너뜁니다.");
 } else {
-  run("gh", ["release", "create", tag, apk, "--repo", "cloim/domo", "--title", `도모 ${tag}`, "--notes", notes], root);
+  run("gh", ["release", "create", tag, apk, "--repo", "cloim/domo", "--title", `도모 ${tag}`, "--notes", notes], root, false);
 }
