@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.ts";
 import { createDb, runMigrations } from "./db/client.ts";
@@ -38,7 +38,7 @@ beforeAll(async () => {
   await runMigrations(db);
   app = await buildApp({
     db,
-    config: { port: 0, databaseUrl: "", jwtSecret: "test-secret", googleClientId: null, devLogin: true, publicUrl: "https://domo.test", webDist: null },
+    config: { port: 0, databaseUrl: "", jwtSecret: "test-secret", googleClientId: null, devLogin: true, publicUrl: "https://domo.test", webDist: null, aiSecretKey: null },
   });
 });
 
@@ -207,6 +207,51 @@ describe("고정지출", () => {
     expect(history.records).toHaveLength(1);
     expect(history.records[0].amount).toBe(50000);
     expect((await owner("POST", "/api/recurring", { ...input, categoryId: base.categories.find((c: { parentId: string | null }) => !c.parentId).id })).statusCode).toBe(400);
+  });
+});
+
+describe("AI 설정과 알림 분석", () => {
+  it("키는 암호화해 저장하고 돌려주지 않으며, 두 형식 모두 서버가 대신 호출한다", async () => {
+    // 가짜 AI 서비스: OpenAI 호환과 Gemini 스트리밍 응답을 흉내 낸다.
+    const seen: { path: string; auth?: string; goog?: string }[] = [];
+    const pattern = String.raw`(?<amount>[\d,]+)원\(\S+\)(?<month>\d{2})/(?<day>\d{2}) (?<hour>\d{2}):(?<minute>\d{2}) (?<counterparty>\S+)`;
+    const answer = JSON.stringify({ name: "신한카드 승인", kind: "expense", pattern });
+    const mock = Fastify();
+    mock.get("/v1/models", async (req) => (seen.push({ path: req.url, auth: req.headers.authorization }), { data: [{ id: "model-b" }, { id: "model-a" }] }));
+    // 모델이 JSON 앞에 설명을 붙여도 JSON 만 골라낸다.
+    mock.post("/v1/chat/completions", async (req) => (seen.push({ path: req.url, auth: req.headers.authorization }), { choices: [{ message: { content: `결과입니다\n${answer}` } }] }));
+    mock.post("/g/models/:model", async (req) => {
+      seen.push({ path: req.url, goog: req.headers["x-goog-api-key"] as string });
+      return [{ candidates: [{ content: { parts: [{ text: "생각", thought: true }, { text: answer.slice(0, 20) }] } }] }, { candidates: [{ content: { parts: [{ text: answer.slice(20) }] } }] }];
+    });
+    await mock.listen({ port: 0, host: "127.0.0.1" });
+    const base = `http://127.0.0.1:${(mock.server.address() as { port: number }).port}`;
+
+    const user = await login("ai@test.com", "에이아이");
+    const openai = { provider: "custom", baseUrl: `${base}/v1`, model: "model-a" };
+    expect((await user("PUT", "/api/ai/settings", { ...openai, key: "sk-secret" })).statusCode).toBe(200);
+    expect((await user("GET", "/api/ai/settings")).json()).toEqual({ ...openai, hasKey: true });
+    const [stored] = await db.execute(sql`SELECT key_enc FROM user_ai_settings`);
+    expect(String((stored as { key_enc: string }).key_enc)).not.toContain("sk-secret");
+
+    expect((await user("POST", "/api/ai/models", {})).json()).toEqual(["model-a", "model-b"]);
+    const sample = { appLabel: "신한카드", title: "신한카드", text: "신한카드(1234)승인 김*모 12,500원(일시불)10/20 13:45 스타벅스 누적1,234,000원", postedAt: "2026-10-20T13:46" };
+    const r1 = (await user("POST", "/api/ai/analyze-notification", { sample })).json();
+    expect(r1).toMatchObject({ problem: null, match: { amount: 12500, counterparty: "스타벅스", occurredAt: "2026-10-20T13:45" } });
+    expect(seen.at(-1)).toMatchObject({ path: "/v1/chat/completions", auth: "Bearer sk-secret" });
+
+    // 저장하지 않은 Gemini 설정과 키로 바로 시험한다.
+    const gemini = { provider: "gemini", baseUrl: `${base}/g/models/{model}:streamGenerateContent`, model: "gemini-3.6-flash" };
+    const r2 = (await user("POST", "/api/ai/analyze-notification", { sample, config: gemini, key: "g-key" })).json();
+    expect(r2).toMatchObject({ problem: null, match: { amount: 12500 } });
+    expect(seen.at(-1)).toMatchObject({ path: "/g/models/gemini-3.6-flash:streamGenerateContent", goog: "g-key" });
+
+    // 키를 지우고, 서비스 오류는 문구를 담아 돌려준다.
+    await user("PUT", "/api/ai/settings", { ...openai, key: null });
+    expect((await user("GET", "/api/ai/settings")).json().hasKey).toBe(false);
+    expect((await user("POST", "/api/ai/models", {})).statusCode).toBe(400);
+    expect((await user("PUT", "/api/ai/settings", { ...openai, baseUrl: "http://10.0.0.1/v1" })).statusCode).toBe(400);
+    await mock.close();
   });
 });
 

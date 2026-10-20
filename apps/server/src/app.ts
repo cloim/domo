@@ -5,6 +5,7 @@ import { jwtVerify } from "jose";
 import type { Config } from "./config.ts";
 import type { Db } from "./db/client.ts";
 import { HttpError } from "./http.ts";
+import { aiRoutes } from "./routes/ai.ts";
 import { authRoutes, sessionKey } from "./routes/auth.ts";
 import { householdRoutes } from "./routes/household.ts";
 import { ledgerRoutes } from "./routes/ledger.ts";
@@ -50,6 +51,7 @@ export async function buildApp({ db, config }: { db: Db; config: Config }) {
   await app.register(householdRoutes, { db, config });
   await app.register(ledgerRoutes, { db });
   await app.register(recurringRoutes, { db });
+  await app.register(aiRoutes, { db, config });
 
   if (config.webDist && existsSync(config.webDist)) {
     await app.register(fastifyStatic, { root: config.webDist });

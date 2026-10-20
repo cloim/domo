@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useDialog } from "../../../components/Dialogs.tsx";
 import SelectControl from "../../../components/SelectControl/index.ts";
-import { analyzeNotification } from "../../../lib/ai.ts";
+import { analyzeNotification, useAiSettings } from "../../../lib/ai.ts";
 import { formatWon } from "../../../lib/format.ts";
 import { DomoNotify, type NotifyTarget } from "../../../lib/notify.ts";
 import { useHousehold, type HouseholdData } from "../../../lib/queries.ts";
@@ -122,7 +122,7 @@ function TemplateEditor({ data, targets, all, template, onBack, onSaved }: Edito
     queryFn: async () => (await DomoNotify.getNotifications({ packageName: draft.packageName, limit: 200 })).notifications,
     enabled: !!draft.packageName,
   });
-  const ai = useQuery({ queryKey: notifyKeys.ai, queryFn: () => DomoNotify.getAiConfig() });
+  const ai = useAiSettings();
 
   // 알림 연동 화면에서 '템플릿 만들기'로 들어오면 그 알림을 예시로 채운다.
   useEffect(() => {
@@ -143,14 +143,14 @@ function TemplateEditor({ data, targets, all, template, onBack, onSaved }: Edito
   const methods = data.paymentMethods.filter((m) => !m.archived || m.id === draft.paymentMethodId);
   const parents = data.categories.filter((c) => c.kind === draft.kind && !c.parentId && !c.archived);
   const children = data.categories.filter((c) => c.parentId === parentId && !c.archived);
-  const aiReady = !!ai.data?.hasKey && !!ai.data.config.model;
+  const aiReady = !!ai.data?.hasKey && !!ai.data.model;
   const appLabel = targets.find((t) => t.packageName === draft.packageName)?.label ?? draft.packageName;
 
   async function analyze() {
     setAnalyzing(true);
     setAiProblem(null);
     try {
-      const { suggestion, problem } = await analyzeNotification(ai.data!.config, { appLabel, title: draft.sampleTitle, text: draft.sampleText, postedAt: samplePostedAt });
+      const { suggestion, problem } = await analyzeNotification({ appLabel, title: draft.sampleTitle, text: draft.sampleText, postedAt: samplePostedAt });
       setDraft((d) => ({ ...d, name: d.name || suggestion.name, kind: suggestion.kind, pattern: suggestion.pattern }));
       setAiProblem(problem);
     } catch (err) {

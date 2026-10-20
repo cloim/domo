@@ -194,52 +194,6 @@ public class DomoNotifyPlugin extends Plugin {
         call.resolve();
     }
 
-    @PluginMethod
-    public void getAiConfig(PluginCall call) {
-        JSObject r = new JSObject();
-        try {
-            r.put("config", JSObject.fromJSONObject(store.aiConfig()));
-        } catch (JSONException e) {
-            r.put("config", new JSObject());
-        }
-        r.put("hasKey", store.hasAiKey());
-        call.resolve(r);
-    }
-
-    @PluginMethod
-    public void setAiConfig(PluginCall call) {
-        store.setAiConfig(call.getObject("config", new JSObject()));
-        call.resolve();
-    }
-
-    @PluginMethod
-    public void setAiKey(PluginCall call) {
-        try {
-            store.setAiKey(call.getString("key", ""));
-            call.resolve();
-        } catch (Exception e) {
-            call.reject("API 키를 안전하게 저장하지 못했습니다.", e);
-        }
-    }
-
-    @PluginMethod
-    public void getAiKey(PluginCall call) {
-        try {
-            JSObject r = new JSObject();
-            String key = store.aiKey();
-            r.put("key", key == null ? JSObject.NULL : key);
-            call.resolve(r);
-        } catch (Exception e) {
-            call.reject("저장된 API 키를 읽지 못했습니다. 키를 다시 등록해 주세요.", e);
-        }
-    }
-
-    @PluginMethod
-    public void deleteAiKey(PluginCall call) {
-        store.deleteAiKey();
-        call.resolve();
-    }
-
     private static JSArray toJs(JSONArray array) {
         try {
             return new JSArray(array.toString());

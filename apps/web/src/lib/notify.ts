@@ -46,12 +46,6 @@ export interface NotifyPrefill {
   sourcePackage: string;
 }
 
-export interface AiConfig {
-  provider?: string;
-  baseUrl?: string;
-  model?: string;
-}
-
 interface DomoNotifyPlugin {
   getStatus(): Promise<NotifyStatus>;
   openListenerSettings(): Promise<void>;
@@ -64,11 +58,6 @@ interface DomoNotifyPlugin {
   setTemplates(options: { templates: NotifyTemplate[] }): Promise<void>;
   getNotifications(options: { packageName?: string; limit?: number }): Promise<{ notifications: CapturedNotification[] }>;
   clearNotifications(options: { packageName: string }): Promise<void>;
-  getAiConfig(): Promise<{ config: AiConfig; hasKey: boolean }>;
-  setAiConfig(options: { config: AiConfig }): Promise<void>;
-  setAiKey(options: { key: string }): Promise<void>;
-  getAiKey(): Promise<{ key: string | null }>;
-  deleteAiKey(): Promise<void>;
   addListener(event: "prefill", handler: (data: NotifyPrefill) => void): Promise<PluginListenerHandle>;
 }
 

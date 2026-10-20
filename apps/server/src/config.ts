@@ -9,6 +9,8 @@ export interface Config {
   devLogin: boolean;
   publicUrl: string;
   webDist: string | null;
+  /** AI API 키 암호화용 비밀값. 없으면 JWT_SECRET 에서 파생한다. */
+  aiSecretKey: string | null;
 }
 
 function required(name: string): string {
@@ -26,5 +28,6 @@ export function loadConfig(): Config {
     devLogin: process.env.DEV_LOGIN === "true",
     publicUrl: process.env.PUBLIC_URL ?? "http://localhost:4300",
     webDist: process.env.WEB_DIST ? resolve(process.env.WEB_DIST) : null,
+    aiSecretKey: process.env.AI_SECRET_KEY || null,
   };
 }

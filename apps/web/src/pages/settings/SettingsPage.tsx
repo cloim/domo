@@ -19,12 +19,14 @@ interface Section {
   label: string;
   icon: typeof House;
   ownerOnly?: boolean;
+  /** 안드로이드 앱에서만 보인다(휴대폰 알림을 다루는 기능). */
+  nativeOnly?: boolean;
   /** 목록 + 상세 화면처럼 폭 제한 없이 상세 영역을 꽉 채운다. */
   fill?: boolean;
   render: () => React.ReactNode;
 }
 
-const GROUPS: { title: string; nativeOnly?: boolean; items: Section[] }[] = [
+const GROUPS: { title: string; items: Section[] }[] = [
   {
     title: "가계",
     items: [
@@ -43,11 +45,9 @@ const GROUPS: { title: string; nativeOnly?: boolean; items: Section[] }[] = [
   },
   {
     title: "자동 기록",
-    // 다른 앱의 알림을 읽는 기능이라 안드로이드 앱에서만 보인다.
-    nativeOnly: true,
     items: [
-      { id: "notify", label: "알림 연동", icon: BellRing, fill: true, render: () => <NotifySection /> },
-      { id: "notify-templates", label: "알림 템플릿", icon: Wand2, fill: true, render: () => <TemplatesSection /> },
+      { id: "notify", label: "알림 연동", icon: BellRing, fill: true, nativeOnly: true, render: () => <NotifySection /> },
+      { id: "notify-templates", label: "알림 템플릿", icon: Wand2, fill: true, nativeOnly: true, render: () => <TemplatesSection /> },
       { id: "ai", label: "AI 설정", icon: Bot, render: () => <AiSection /> },
     ],
   },
@@ -55,7 +55,8 @@ const GROUPS: { title: string; nativeOnly?: boolean; items: Section[] }[] = [
 ];
 
 const DEFAULT_SECTION = "household";
-const VISIBLE_GROUPS = GROUPS.filter((g) => !g.nativeOnly || notifySupported);
+// 휴대폰 알림을 다루는 화면은 안드로이드 앱에서만 보인다.
+const VISIBLE_GROUPS = GROUPS.map((g) => ({ ...g, items: g.items.filter((s) => !s.nativeOnly || notifySupported) })).filter((g) => g.items.length > 0);
 
 export function SettingsPage() {
   const me = useOutletContext<Me>();

@@ -29,6 +29,13 @@
       "when": 1792483221916,
       "tag": "0003_recurring_amount_changes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792486591566,
+      "tag": "0004_user_ai_settings",
+      "breakpoints": true
     }
   ]
 }

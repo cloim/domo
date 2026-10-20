@@ -9,7 +9,6 @@ export const notifyKeys = {
   notifications: (pkg: string) => ["notify", "notifications", pkg] as const,
   apps: ["notify", "apps"] as const,
   icons: (pkgs: string[]) => ["notify", "icons", ...pkgs] as const,
-  ai: ["notify", "ai"] as const,
 };
 
 export const useNotifyStatus = () => useQuery({ queryKey: notifyKeys.status, queryFn: () => DomoNotify.getStatus(), refetchInterval: 30_000 });

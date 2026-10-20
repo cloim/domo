@@ -6,33 +6,21 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-import android.security.keystore.KeyGenParameterSpec;
-import android.security.keystore.KeyProperties;
-import android.util.Base64;
-import java.nio.charset.StandardCharsets;
-import java.security.KeyStore;
 import java.util.Iterator;
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.GCMParameterSpec;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
  * 알림 연동 설정과 기록을 기기에만 저장한다.
- * 대상 앱, 템플릿, AI 설정은 SharedPreferences(JSON), 알림 기록은 SQLite,
- * AI API 키는 Android Keystore 의 AES 키로 암호화해 둔다.
+ * 대상 앱과 템플릿은 SharedPreferences(JSON), 알림 기록은 SQLite 에 둔다.
+ * AI 설정과 키는 계정별로 서버에 있다.
  */
 public final class NotifyStore {
     private static final String PREFS = "domo_notify";
     private static final String KEY_TARGETS = "targets";
     private static final String KEY_TEMPLATES = "templates";
-    private static final String KEY_AI_CONFIG = "ai_config";
-    private static final String KEY_AI_SECRET = "ai_secret";
     private static final String KEY_RECENT = "recent_matches";
-    private static final String KEYSTORE_ALIAS = "domo_ai_key";
 
     /** 앱마다 보관하는 최근 알림 수와 기간 */
     static final int KEEP_PER_APP = 200;
@@ -74,18 +62,6 @@ public final class NotifyStore {
 
     public void setTemplates(JSONArray value) {
         prefs.edit().putString(KEY_TEMPLATES, value.toString()).apply();
-    }
-
-    public JSONObject aiConfig() {
-        try {
-            return new JSONObject(prefs.getString(KEY_AI_CONFIG, "{}"));
-        } catch (JSONException e) {
-            return new JSONObject();
-        }
-    }
-
-    public void setAiConfig(JSONObject value) {
-        prefs.edit().putString(KEY_AI_CONFIG, value.toString()).apply();
     }
 
     private JSONArray readArray(String key) {
@@ -173,47 +149,6 @@ public final class NotifyStore {
 
     public void deleteNotifications(String packageName) {
         db.getWritableDatabase().delete("notifications", "pkg = ?", new String[] { packageName });
-    }
-
-    // ───── AI API 키 (Keystore 암호화) ─────
-
-    public boolean hasAiKey() {
-        return prefs.contains(KEY_AI_SECRET);
-    }
-
-    public void setAiKey(String key) throws Exception {
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey());
-        byte[] encrypted = cipher.doFinal(key.getBytes(StandardCharsets.UTF_8));
-        String packed = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP) + ":" + Base64.encodeToString(encrypted, Base64.NO_WRAP);
-        prefs.edit().putString(KEY_AI_SECRET, packed).apply();
-    }
-
-    public String aiKey() throws Exception {
-        String packed = prefs.getString(KEY_AI_SECRET, null);
-        if (packed == null) return null;
-        String[] parts = packed.split(":", 2);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE, secretKey(), new GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)));
-        return new String(cipher.doFinal(Base64.decode(parts[1], Base64.NO_WRAP)), StandardCharsets.UTF_8);
-    }
-
-    public void deleteAiKey() {
-        prefs.edit().remove(KEY_AI_SECRET).apply();
-    }
-
-    private static SecretKey secretKey() throws Exception {
-        KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
-        ks.load(null);
-        if (ks.containsAlias(KEYSTORE_ALIAS)) return ((KeyStore.SecretKeyEntry) ks.getEntry(KEYSTORE_ALIAS, null)).getSecretKey();
-        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
-        generator.init(
-            new KeyGenParameterSpec.Builder(KEYSTORE_ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .build()
-        );
-        return generator.generateKey();
     }
 
     private static final class Db extends SQLiteOpenHelper {

@@ -12,6 +12,16 @@ export const users = pgTable("users", {
   createdAt: createdAt(),
 });
 
+/** 사용자별 AI 서비스 설정. API 키는 AES-256-GCM 으로 암호화해 둔다. */
+export const userAiSettings = pgTable("user_ai_settings", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  baseUrl: text("base_url").notNull(),
+  model: text("model").notNull(),
+  keyEnc: text("key_enc"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** 모든 가계 데이터의 소유 단위. 이후 자산 모듈도 이 단위에 붙인다. */
 export const households = pgTable("households", {
   id: uuid("id").primaryKey().defaultRandom(),
