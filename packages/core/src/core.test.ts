@@ -18,6 +18,7 @@ import {
   nextBillingCycle,
   paymentMethodInputSchema,
   paymentMethodLabel,
+  buildRecurringTimeline,
   dueRecurringMonths,
   nextRecurringDate,
   recurringStartMonth,
@@ -221,5 +222,24 @@ describe("고정지출", () => {
     expect(dueRecurringMonths(eom, "2027-02-28")).toEqual(["2027-02"]);
     expect(nextRecurringDate(eom)).toBe("2027-02-28");
     expect(nextRecurringDate({ ...base, lastGeneratedMonth: "2026-11", endMonth: "2026-11" })).toBeNull();
+  });
+});
+
+describe("고정지출 금액 이력", () => {
+  const changes = [
+    { id: "c0", oldAmount: null, newAmount: 250000, memberId: "m1", changedAt: "2026-10-20T03:00:00.000Z" },
+    { id: "c1", oldAmount: 250000, newAmount: 262000, memberId: "m1", changedAt: "2026-12-28T03:00:00.000Z" },
+  ];
+  const rec = (id: string, date: string, amount: number) => ({ transactionId: id, occurredAt: `${date}T00:00`, amount, createdAt: `${date}T05:00:00.000Z` });
+  it("월별 증감, 이 달만 수정, 설정 변경을 최신순으로 합친다", () => {
+    const t = buildRecurringTimeline([rec("a", "2026-10-20", 250000), rec("b", "2026-11-20", 248500), rec("c", "2026-12-20", 250000), rec("d", "2027-01-20", 262000)], changes, 262000);
+    expect(t.map((i) => (i.type === "month" ? i.month : `변경 ${i.newAmount}`))).toEqual(["2027-01", "변경 262000", "2026-12", "2026-11", "2026-10", "변경 250000"]);
+    const nov = t.find((i) => i.type === "month" && i.month === "2026-11");
+    expect(nov).toMatchObject({ diff: -1500, editedOnlyThisMonth: true });
+    expect(t[0]).toMatchObject({ diff: 12000, editedOnlyThisMonth: false });
+  });
+  it("변경 기록이 없던 예전 고정지출은 현재 금액을 기준으로 본다", () => {
+    const t = buildRecurringTimeline([rec("a", "2026-10-20", 30000)], [], 30000);
+    expect(t).toEqual([{ type: "month", month: "2026-10", transactionId: "a", amount: 30000, diff: null, editedOnlyThisMonth: false }]);
   });
 });

@@ -6,3 +6,4 @@ export * from "./version.ts";
 export * from "./defaults.ts";
 export * from "./billing.ts";
 export * from "./recurring.ts";
+export * from "./recurringHistory.ts";

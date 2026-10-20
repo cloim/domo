@@ -191,6 +191,17 @@ describe("고정지출", () => {
     const [item] = (await owner("GET", "/api/recurring")).json().filter((r: { id: string }) => r.id === id);
     await owner("PUT", `/api/recurring/${id}`, { ...input, active: true, endMonth: item.startMonth });
     expect(await generateRecurring(db, "2099-12-31")).toBe(1);
+
+    // 금액을 바꾸면 이력에 남고, 바꾸지 않은 수정은 남기지 않는다.
+    await owner("PUT", `/api/recurring/${id}`, { ...input, active: true, endMonth: item.startMonth, amount: 52000 });
+    await owner("PUT", `/api/recurring/${id}`, { ...input, active: true, endMonth: item.startMonth, amount: 52000, memo: "실손" });
+    const history = (await owner("GET", `/api/recurring/${id}/history`)).json();
+    expect(history.changes.map((c: { oldAmount: number | null; newAmount: number }) => [c.oldAmount, c.newAmount])).toEqual([
+      [null, 50000],
+      [50000, 52000],
+    ]);
+    expect(history.records).toHaveLength(1);
+    expect(history.records[0].amount).toBe(50000);
     expect((await owner("POST", "/api/recurring", { ...input, categoryId: base.categories.find((c: { parentId: string | null }) => !c.parentId).id })).statusCode).toBe(400);
   });
 });

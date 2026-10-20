@@ -98,6 +98,20 @@ export const recurringExpenses = pgTable("recurring_expenses", {
   createdAt: createdAt(),
 });
 
+/** 고정지출 금액 변경 이력. 등록 시에는 old_amount 가 비어 있다. */
+export const recurringAmountChanges = pgTable(
+  "recurring_amount_changes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recurringId: uuid("recurring_id").notNull().references(() => recurringExpenses.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id").references(() => householdMembers.id, { onDelete: "set null" }),
+    oldAmount: bigint("old_amount", { mode: "number" }),
+    newAmount: bigint("new_amount", { mode: "number" }).notNull(),
+    changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("recurring_amount_changes_recurring_idx").on(t.recurringId)],
+);
+
 export const transactions = pgTable(
   "transactions",
   {

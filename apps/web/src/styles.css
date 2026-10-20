@@ -602,3 +602,16 @@ button.rank-row:hover { background: var(--hover); }
 .bills-list { margin: 0; padding: 0; list-style: none; }
 .bills-list li { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 0; }
 .bills-list li + li { border-top: 1px solid var(--line); }
+
+/* 고정지출 금액 이력 */
+.timeline { margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); list-style: none; }
+.timeline > li + li { border-top: 1px solid var(--line); }
+.timeline-month { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 12px 0 14px; color: inherit; text-decoration: none; }
+.timeline-month:hover { background: var(--hover); }
+.timeline-date { flex: none; width: 64px; color: var(--ink-3); font-size: 13px; }
+.timeline-diff { font-size: 13px; }
+.timeline-diff.up { color: var(--accent); }
+.timeline-diff.down { color: var(--income); }
+.timeline-go { margin-left: auto; color: var(--ink-3); }
+.timeline-change { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; background: var(--bg); color: var(--ink-2); font-size: 14px; }
+.timeline > li.hint { padding: 14px; }

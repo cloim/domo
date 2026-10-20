@@ -2,7 +2,7 @@ import { dueRecurringMonths, nowLocalDateTime, recurringDate, recurringInputSche
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Db } from "../db/client.ts";
-import { categories, householdMembers, paymentMethods, recurringExpenses, transactions } from "../db/schema.ts";
+import { categories, householdMembers, paymentMethods, recurringAmountChanges, recurringExpenses, transactions } from "../db/schema.ts";
 import { HttpError, parse, requireMember, type MemberRow } from "../http.ts";
 
 type RecurringRow = typeof recurringExpenses.$inferSelect;
@@ -100,10 +100,14 @@ export async function recurringRoutes(app: FastifyInstance, { db }: { db: Db }) 
     const input = parse(recurringInputSchema, req.body);
     await assertRefs(me, input);
     const today = nowLocalDateTime().slice(0, 10);
-    const [row] = await db
-      .insert(recurringExpenses)
-      .values({ ...values(input), householdId: me.householdId, startMonth: recurringStartMonth(input.paymentDay, today) })
-      .returning();
+    const row = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(recurringExpenses)
+        .values({ ...values(input), householdId: me.householdId, startMonth: recurringStartMonth(input.paymentDay, today) })
+        .returning();
+      await tx.insert(recurringAmountChanges).values({ recurringId: created!.id, memberId: me.id, oldAmount: null, newAmount: input.amount });
+      return created;
+    });
     await generateRecurring(db, today, me.householdId);
     return { id: row!.id };
   });
@@ -116,9 +120,32 @@ export async function recurringRoutes(app: FastifyInstance, { db }: { db: Db }) 
     const today = nowLocalDateTime().slice(0, 10);
     // 멈췄던 고정지출을 다시 켜면 멈춘 동안의 달은 건너뛰고 지금부터 다시 시작한다.
     const restart = !!current.archivedAt && input.active ? { startMonth: recurringStartMonth(input.paymentDay, today), lastGeneratedMonth: null } : {};
-    await db.update(recurringExpenses).set({ ...values(input), ...restart }).where(eq(recurringExpenses.id, current.id));
+    await db.transaction(async (tx) => {
+      await tx.update(recurringExpenses).set({ ...values(input), ...restart }).where(eq(recurringExpenses.id, current.id));
+      if (current.amount !== input.amount) {
+        await tx.insert(recurringAmountChanges).values({ recurringId: current.id, memberId: me.id, oldAmount: current.amount, newAmount: input.amount });
+      }
+    });
     await generateRecurring(db, today, me.householdId);
     return { ok: true };
+  });
+
+  /** 금액 이력: 이 고정지출로 생성된 월별 기록과 금액 변경 기록 */
+  app.get<{ Params: { id: string } }>("/api/recurring/:id/history", async (req) => {
+    const me = await requireMember(db, req);
+    const current = await owned(me, req.params.id);
+    const [records, changes] = await Promise.all([
+      db
+        .select({ transactionId: transactions.id, occurredAt: transactions.occurredAt, amount: transactions.amount, createdAt: transactions.createdAt })
+        .from(transactions)
+        .where(eq(transactions.recurringId, current.id))
+        .orderBy(asc(transactions.occurredAt)),
+      db.select().from(recurringAmountChanges).where(eq(recurringAmountChanges.recurringId, current.id)).orderBy(asc(recurringAmountChanges.changedAt)),
+    ]);
+    return {
+      records: records.map((r) => ({ ...r, occurredAt: r.occurredAt.slice(0, 16).replace(" ", "T"), createdAt: r.createdAt.toISOString() })),
+      changes: changes.map((c) => ({ id: c.id, oldAmount: c.oldAmount, newAmount: c.newAmount, memberId: c.memberId, changedAt: c.changedAt.toISOString() })),
+    };
   });
 
   /** 이미 만든 기록은 남기고 연결만 끊는다(외래 키 set null). */

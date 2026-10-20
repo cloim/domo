@@ -1,8 +1,17 @@
-import { currentYearMonth, nextRecurringDate, recurringInputSchema, type RecurringExpense, type RecurringInput } from "@domo/core";
+import {
+  buildRecurringTimeline,
+  currentYearMonth,
+  nextRecurringDate,
+  recurringInputSchema,
+  type RecurringAmountChange,
+  type RecurringExpense,
+  type RecurringInput,
+  type RecurringMonthRecord,
+} from "@domo/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Plus, Repeat, Search, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Repeat, Search, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
 import { api } from "../../lib/api.ts";
@@ -178,7 +187,8 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
   }, [item?.id]);
 
   // 저장하면 결제일이 된 기록이 바로 생길 수 있어 기록 목록도 다시 받는다.
-  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: keys.recurring }), qc.invalidateQueries({ queryKey: ["transactions"] })]);
+  const refresh = () =>
+    Promise.all([qc.invalidateQueries({ queryKey: keys.recurring }), qc.invalidateQueries({ queryKey: ["transactions"] }), qc.invalidateQueries({ queryKey: ["recurring-history"] })]);
   const save = useMutation({
     mutationFn: async (input: RecurringInput) =>
       item ? (await api(`/api/recurring/${item.id}`, { method: "PUT", body: input }), item.id) : (await api<{ id: string }>("/api/recurring", { method: "POST", body: input })).id,
@@ -409,6 +419,7 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
             </label>
           </div>
         </div>
+        {item && <AmountHistory item={item} data={data} />}
         {item && !item.active && draft.active && <span className="hint">다시 켜면 멈춰 있던 달은 건너뛰고 다음 결제일부터 만들어요.</span>}
         {!item && <span className="hint">이번 달 결제일이 이미 지났다면 다음 달부터 만들어요.</span>}
       </div>
@@ -424,5 +435,69 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
         </button>
       </div>
     </form>
+  );
+}
+
+/** 월별 실제 금액과 설정 금액 변경을 최신순으로 보여준다. */
+function AmountHistory({ item, data }: { item: RecurringExpense; data: HouseholdData }) {
+  const history = useQuery({
+    queryKey: ["recurring-history", item.id],
+    queryFn: () => api<{ records: RecurringMonthRecord[]; changes: RecurringAmountChange[] }>(`/api/recurring/${item.id}/history`),
+  });
+  const memberName = (id: string | null) => data.members.find((m) => m.id === id)?.displayName ?? "알 수 없음";
+
+  return (
+    <section className="field" aria-labelledby="fx-history" style={{ marginTop: 8 }}>
+      <h3 id="fx-history" className="field-label" style={{ margin: 0 }}>
+        금액 이력
+      </h3>
+      {history.isPending ? (
+        <span className="skeleton" style={{ display: "block", height: 96 }} />
+      ) : history.isError ? (
+        <div className="readonly-note" role="alert">
+          이력을 불러오지 못했어요.
+          <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={() => void history.refetch()}>
+            다시 시도
+          </button>
+        </div>
+      ) : (
+        <ol className="timeline">
+          {buildRecurringTimeline(history.data.records, history.data.changes, item.amount).map((t) =>
+            t.type === "month" ? (
+              <li key={t.transactionId}>
+                <Link className="timeline-month" to={`/records?m=${t.month}`}>
+                  <span className="timeline-date num">{t.month.replace("-", ".")}</span>
+                  <strong className="num">{formatWon(t.amount)}원</strong>
+                  {t.diff !== null && t.diff !== 0 && (
+                    <span className={`timeline-diff num ${t.diff > 0 ? "up" : "down"}`}>
+                      {t.diff > 0 ? "▲" : "▼"} {formatWon(Math.abs(t.diff))}
+                    </span>
+                  )}
+                  {t.editedOnlyThisMonth && <span className="badge">이 달만 수정</span>}
+                  <ChevronRight size={15} aria-hidden="true" className="timeline-go" />
+                </Link>
+              </li>
+            ) : (
+              <li key={t.id} className="timeline-change">
+                <span className="timeline-date num">{formatShortDate(t.date)}</span>
+                <span>
+                  {t.oldAmount === null ? (
+                    <>
+                      <span className="num">{formatWon(t.newAmount)}원</span>으로 등록
+                    </>
+                  ) : (
+                    <>
+                      설정 변경 <span className="num">{formatWon(t.oldAmount)}</span> → <strong className="num">{formatWon(t.newAmount)}</strong>원
+                    </>
+                  )}
+                  <span className="hint">, {memberName(t.memberId)}</span>
+                </span>
+              </li>
+            ),
+          )}
+          {history.data.records.length === 0 && history.data.changes.length === 0 && <li className="hint">아직 이력이 없어요.</li>}
+        </ol>
+      )}
+    </section>
   );
 }
