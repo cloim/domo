@@ -1,5 +1,4 @@
 import { applyNotifyTemplate, validateNotifyPattern, type NotifyTemplate, type TransactionKind } from "@domo/core";
-import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -7,11 +6,11 @@ import { useDialog } from "../../../components/Dialogs.tsx";
 import SelectControl from "../../../components/SelectControl/index.ts";
 import { analyzeNotification, useAiSettings } from "../../../lib/ai.ts";
 import { formatWon } from "../../../lib/format.ts";
-import { DomoNotify, type NotifyTarget } from "../../../lib/notify.ts";
+import { notifySupported, type NotifyTarget } from "../../../lib/notify.ts";
 import { useHousehold, type HouseholdData } from "../../../lib/queries.ts";
 import { MD_TWO_PANE, useMedia } from "../../../lib/useMedia.ts";
-import { AppIcon } from "./NotifySection.tsx";
-import { notifyKeys, toLocalDateTime, useAppIcons, useSaveTemplates, useTargets, useTemplates } from "./useNotify.ts";
+import { AppIcon, DeviceSelect, NoDevice } from "./NotifySection.tsx";
+import { toLocalDateTime, useAppIcons, useNotifications, useNotifySource, useSaveTemplates, useTargets, useTemplates, type NotifySource } from "./useNotify.ts";
 
 const NEW = "new";
 const KIND_LABEL: Record<TransactionKind, string> = { expense: "지출", income: "수입" };
@@ -19,12 +18,13 @@ const KIND_LABEL: Record<TransactionKind, string> = { expense: "지출", income:
 /** 설정 > 자동 기록 > 알림 템플릿 */
 export function TemplatesSection() {
   const { data } = useHousehold();
-  const templates = useTemplates();
-  const targets = useTargets();
+  const source = useNotifySource();
+  const templates = useTemplates(source);
+  const targets = useTargets(source);
   const [params, setParams] = useSearchParams();
   const twoPane = useMedia(MD_TWO_PANE);
   const list = templates.data ?? [];
-  const icons = useAppIcons([...new Set(list.map((t) => t.packageName))]);
+  const icons = useAppIcons(source, [...new Set(list.map((t) => t.packageName))]);
   const label = (pkg: string) => targets.data?.find((t) => t.packageName === pkg)?.label ?? pkg;
 
   const requested = params.get("id");
@@ -36,10 +36,17 @@ export function TemplatesSection() {
     setParams(next, { replace: !twoPane && !id });
   };
 
+  if (!source) return <NoDevice />;
+
   return (
     <div className={`md${selectedId ? " has-selection" : ""}`}>
       <section className="md-list" aria-label="알림 템플릿 목록">
-        <div className="md-list-body" style={{ paddingTop: 12 }}>
+        {!notifySupported && (
+          <div className="md-list-head">
+            <DeviceSelect source={source} />
+          </div>
+        )}
+        <div className="md-list-body" style={notifySupported ? { paddingTop: 12 } : undefined}>
           {templates.isPending ? (
             <span className="skeleton" style={{ display: "block", height: 112, margin: "0 8px" }} />
           ) : list.length === 0 ? (
@@ -71,7 +78,7 @@ export function TemplatesSection() {
 
       <section className="md-detail" aria-label="알림 템플릿 상세">
         {data && targets.data && templates.data && (selectedId === NEW || selected) ? (
-          <TemplateEditor key={selectedId ?? ""} data={data} targets={targets.data} all={templates.data} template={selected} onBack={() => select(null)} onSaved={select} />
+          <TemplateEditor key={`${source.deviceId}:${selectedId ?? ""}`} source={source} data={data} targets={targets.data} all={templates.data} template={selected} onBack={() => select(null)} onSaved={select} />
         ) : (
           <div className="md-empty">템플릿을 골라 주세요.</div>
         )}
@@ -81,6 +88,7 @@ export function TemplatesSection() {
 }
 
 interface EditorProps {
+  source: NotifySource;
   data: HouseholdData;
   targets: NotifyTarget[];
   all: NotifyTemplate[];
@@ -89,9 +97,9 @@ interface EditorProps {
   onSaved: (id: string) => void;
 }
 
-function TemplateEditor({ data, targets, all, template, onBack, onSaved }: EditorProps) {
+function TemplateEditor({ source, data, targets, all, template, onBack, onSaved }: EditorProps) {
   const dialog = useDialog();
-  const save = useSaveTemplates();
+  const save = useSaveTemplates(source);
   const [params] = useSearchParams();
   const fromId = Number(params.get("from")) || null;
   const fromApp = params.get("app");
@@ -117,11 +125,7 @@ function TemplateEditor({ data, targets, all, template, onBack, onSaved }: Edito
   const [aiProblem, setAiProblem] = useState<string | null>(null);
   const set = <K extends keyof NotifyTemplate>(key: K, value: NotifyTemplate[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
-  const recent = useQuery({
-    queryKey: notifyKeys.notifications(draft.packageName),
-    queryFn: async () => (await DomoNotify.getNotifications({ packageName: draft.packageName, limit: 200 })).notifications,
-    enabled: !!draft.packageName,
-  });
+  const recent = useNotifications(source, draft.packageName, 200);
   const ai = useAiSettings();
 
   // 알림 연동 화면에서 '템플릿 만들기'로 들어오면 그 알림을 예시로 채운다.

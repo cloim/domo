@@ -9,3 +9,4 @@ export * from "./recurring.ts";
 export * from "./recurringHistory.ts";
 export * from "./notifyTemplate.ts";
 export * from "./ai.ts";
+export * from "./notifySync.ts";

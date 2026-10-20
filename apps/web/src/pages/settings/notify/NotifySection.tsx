@@ -1,25 +1,42 @@
-import { BellRing, ChevronLeft, Plus, Search, ShieldAlert, Trash2, Wand2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { BellRing, ChevronLeft, Plus, Search, ShieldAlert, Smartphone, Trash2, Wand2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useDialog } from "../../../components/Dialogs.tsx";
 import { Modal } from "../../../components/Modal/index.js";
-import { DomoNotify, notifyHealth, type InstalledApp, type NotifyTarget } from "../../../lib/notify.ts";
+import SelectControl from "../../../components/SelectControl/index.ts";
+import { DomoNotify, notifyHealth, notifySupported, type InstalledApp, type NotifyTarget } from "../../../lib/notify.ts";
 import { MD_TWO_PANE, useMedia } from "../../../lib/useMedia.ts";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { notifyKeys, toLocalDateTime, useAppIcons, useNotifyStatus, useSaveTargets, useTargets, useTemplates } from "./useNotify.ts";
+import {
+  clearNotifications,
+  notifyKeys,
+  pickDevice,
+  toLocalDateTime,
+  useAppIcons,
+  useDevices,
+  useInstalledApps,
+  useNotifications,
+  useNotifyStatus,
+  useNotifySource,
+  useSaveTargets,
+  useTargets,
+  useTemplates,
+  type NotifySource,
+} from "./useNotify.ts";
 
-/** 설정 > 자동 기록 > 알림 연동: 권한 상태, 감시 대상 앱, 앱별 최근 알림 */
+/** 설정 > 자동 기록 > 알림 연동: 감시 대상 앱과 앱별 최근 알림. PC에서는 휴대폰을 골라 본다. */
 export function NotifySection() {
   const dialog = useDialog();
   const [params, setParams] = useSearchParams();
   const twoPane = useMedia(MD_TWO_PANE);
+  const source = useNotifySource();
   const status = useNotifyStatus();
-  const targets = useTargets();
-  const saveTargets = useSaveTargets();
+  const targets = useTargets(source);
+  const saveTargets = useSaveTargets(source);
   const [picking, setPicking] = useState(false);
 
   const list = targets.data ?? [];
-  const icons = useAppIcons(list.map((t) => t.packageName));
+  const icons = useAppIcons(source, list.map((t) => t.packageName));
   const requested = params.get("app");
   const selectedPkg = requested ?? (twoPane ? (list[0]?.packageName ?? null) : null);
   const selected = list.find((t) => t.packageName === selectedPkg) ?? null;
@@ -30,6 +47,8 @@ export function NotifySection() {
     setParams(next, { replace: !twoPane && !pkg });
   };
 
+  if (!source) return <NoDevice />;
+
   const update = (pkg: string, patch: Partial<NotifyTarget>) =>
     saveTargets.mutate(
       list.map((t) => (t.packageName === pkg ? { ...t, ...patch } : t)),
@@ -39,16 +58,20 @@ export function NotifySection() {
   async function addApps(apps: InstalledApp[]) {
     const known = new Set(list.map((t) => t.packageName));
     const added = apps.filter((a) => !known.has(a.packageName)).map((a) => ({ packageName: a.packageName, label: a.label, enabled: true, removeOriginal: false }));
-    await saveTargets.mutateAsync([...list, ...added]);
-    setPicking(false);
-    if (added[0]) select(added[0].packageName);
+    try {
+      await saveTargets.mutateAsync([...list, ...added]);
+      setPicking(false);
+      if (added[0]) select(added[0].packageName);
+    } catch (err) {
+      await dialog.alert("저장하지 못했습니다", (err as Error).message);
+    }
   }
 
   async function removeTarget(t: NotifyTarget) {
     const ok = await dialog.confirm({ title: "대상 앱 삭제", message: `${t.label}의 알림을 더 이상 보지 않을까요?\n이 앱의 템플릿은 남지만 동작하지 않습니다.`, confirmLabel: "삭제", danger: true });
     if (!ok) return;
     await saveTargets.mutateAsync(list.filter((x) => x.packageName !== t.packageName));
-    await DomoNotify.clearNotifications({ packageName: t.packageName });
+    await clearNotifications(source!, t.packageName);
     select(null);
   }
 
@@ -57,9 +80,7 @@ export function NotifySection() {
   return (
     <div className={`md${selectedPkg ? " has-selection" : ""}`}>
       <section className="md-list" aria-label="알림 감시 대상 앱">
-        <div className="md-list-head">
-          <PermissionCard />
-        </div>
+        <div className="md-list-head">{notifySupported ? <PermissionCard /> : <DeviceSelect source={source} />}</div>
         <div className="md-list-body">
           {targets.isPending ? (
             <span className="skeleton" style={{ display: "block", height: 112, margin: "0 8px" }} />
@@ -97,13 +118,47 @@ export function NotifySection() {
 
       <section className="md-detail" aria-label="대상 앱 상세">
         {selected ? (
-          <TargetDetail target={selected} icon={icons.data?.[selected.packageName]} onBack={() => select(null)} onUpdate={(p) => update(selected.packageName, p)} onRemove={() => void removeTarget(selected)} />
+          <TargetDetail source={source} target={selected} icon={icons.data?.[selected.packageName]} onBack={() => select(null)} onUpdate={(p) => update(selected.packageName, p)} onRemove={() => void removeTarget(selected)} />
         ) : (
           <div className="md-empty">대상 앱을 골라 주세요.</div>
         )}
       </section>
 
-      {picking && <AppPicker existing={list.map((t) => t.packageName)} onClose={() => setPicking(false)} onPick={(apps) => void addApps(apps)} />}
+      {picking && <AppPicker source={source} existing={list.map((t) => t.packageName)} onClose={() => setPicking(false)} onPick={(apps) => void addApps(apps)} />}
+    </div>
+  );
+}
+
+/** PC: 알림 연동을 쓰는 휴대폰을 고른다. 고르지 않으면 가장 최근 휴대폰 */
+export function DeviceSelect({ source }: { source: NotifySource }) {
+  const devices = useDevices();
+  const list = devices.data ?? [];
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor="notify-device">
+        휴대폰
+      </label>
+      <SelectControl id="notify-device" value={source.deviceId ?? ""} onChange={(e) => pickDevice(e.target.value)}>
+        {list.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name} ({new Date(d.lastSeenAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })} 동기화)
+          </option>
+        ))}
+      </SelectControl>
+      <span className="hint">여기서 고친 대상 앱과 템플릿은 그 휴대폰이 다음 알림을 받거나 앱을 열 때 받아 가요.</span>
+    </div>
+  );
+}
+
+/** PC에서 아직 등록된 휴대폰이 없을 때 */
+export function NoDevice() {
+  const devices = useDevices();
+  if (devices.isPending) return <span className="skeleton" style={{ display: "block", height: 160, margin: 20 }} />;
+  return (
+    <div className="empty">
+      <Smartphone size={28} aria-hidden="true" />
+      <strong>연결된 휴대폰이 없어요</strong>
+      <span>안드로이드 도모 앱에 같은 계정으로 로그인하면 휴대폰의 알림 이력과 템플릿을 여기서 보고 고칠 수 있어요.</span>
     </div>
   );
 }
@@ -149,17 +204,28 @@ function PermissionCard() {
 }
 
 export function AppIcon({ src }: { src?: string }) {
-  return src ? <img className="app-icon" src={src} alt="" /> : <span className="md-item-icon"><BellRing size={17} aria-hidden="true" /></span>;
+  return src ? (
+    <img className="app-icon" src={src} alt="" />
+  ) : (
+    <span className="md-item-icon">
+      <BellRing size={17} aria-hidden="true" />
+    </span>
+  );
 }
 
-function TargetDetail({ target, icon, onBack, onUpdate, onRemove }: { target: NotifyTarget; icon?: string; onBack: () => void; onUpdate: (patch: Partial<NotifyTarget>) => void; onRemove: () => void }) {
+interface DetailProps {
+  source: NotifySource;
+  target: NotifyTarget;
+  icon?: string;
+  onBack: () => void;
+  onUpdate: (patch: Partial<NotifyTarget>) => void;
+  onRemove: () => void;
+}
+
+function TargetDetail({ source, target, icon, onBack, onUpdate, onRemove }: DetailProps) {
   const navigate = useNavigate();
-  const templates = useTemplates();
-  const notifications = useQuery({
-    queryKey: notifyKeys.notifications(target.packageName),
-    queryFn: async () => (await DomoNotify.getNotifications({ packageName: target.packageName, limit: 100 })).notifications,
-    refetchInterval: 15_000,
-  });
+  const templates = useTemplates(source);
+  const notifications = useNotifications(source, target.packageName, 100, true);
   const templateName = (id: string | null) => templates.data?.find((t) => t.id === id)?.name;
 
   return (
@@ -200,8 +266,12 @@ function TargetDetail({ target, icon, onBack, onUpdate, onRemove }: { target: No
           </h3>
           {notifications.isPending ? (
             <span className="skeleton" style={{ display: "block", height: 120 }} />
+          ) : notifications.isError ? (
+            <div className="readonly-note is-bad" role="alert">
+              알림 이력을 불러오지 못했어요. {(notifications.error as Error).message}
+            </div>
           ) : (notifications.data ?? []).length === 0 ? (
-            <p className="hint">아직 받은 알림이 없어요. 이 앱에서 알림이 오면 여기에 쌓입니다(최근 200건, 30일).</p>
+            <p className="hint">아직 받은 알림이 없어요. 이 앱에서 알림이 오면 여기에 쌓입니다(최근 30일).</p>
           ) : (
             <ul className="notify-list">
               {notifications.data!.map((n) => (
@@ -211,8 +281,8 @@ function TargetDetail({ target, icon, onBack, onUpdate, onRemove }: { target: No
                     <span>{n.text}</span>
                     <span className="hint">{toLocalDateTime(n.postedAt).replace("T", " ")}</span>
                   </div>
-                  {n.matchedTemplateId ? (
-                    <span className="badge badge-accent">{templateName(n.matchedTemplateId) ?? "템플릿"}</span>
+                  {n.matchedTemplateId && templateName(n.matchedTemplateId) ? (
+                    <span className="badge badge-accent">{templateName(n.matchedTemplateId)}</span>
                   ) : (
                     <button
                       type="button"
@@ -232,8 +302,8 @@ function TargetDetail({ target, icon, onBack, onUpdate, onRemove }: { target: No
   );
 }
 
-function AppPicker({ existing, onClose, onPick }: { existing: string[]; onClose: () => void; onPick: (apps: InstalledApp[]) => void }) {
-  const apps = useQuery({ queryKey: notifyKeys.apps, queryFn: async () => (await DomoNotify.listApps()).apps, staleTime: 60_000 });
+function AppPicker({ source, existing, onClose, onPick }: { source: NotifySource; existing: string[]; onClose: () => void; onPick: (apps: InstalledApp[]) => void }) {
+  const apps = useInstalledApps(source);
   const [query, setQuery] = useState("");
   const [showSystem, setShowSystem] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -246,8 +316,8 @@ function AppPicker({ existing, onClose, onPick }: { existing: string[]; onClose:
       .filter((a) => !q || a.label.toLowerCase().includes(q) || a.packageName.toLowerCase().includes(q))
       .sort((a, b) => a.label.localeCompare(b.label, "ko"));
   }, [apps.data, existing, query, showSystem]);
-  // 아이콘은 화면에 보이는 앞쪽 일부만 불러온다.
-  const icons = useAppIcons(visible.slice(0, 60).map((a) => a.packageName));
+  // 아이콘은 화면에 보이는 앞쪽 일부만 불러온다(휴대폰에서만).
+  const icons = useAppIcons(source, visible.slice(0, 60).map((a) => a.packageName));
 
   const toggle = (pkg: string) =>
     setPicked((prev) => {
@@ -286,6 +356,8 @@ function AppPicker({ existing, onClose, onPick }: { existing: string[]; onClose:
         </label>
         {apps.isPending ? (
           <span className="skeleton" style={{ display: "block", height: 200 }} />
+        ) : (apps.data ?? []).length === 0 && source.kind === "remote" ? (
+          <p className="hint">휴대폰이 아직 설치 앱 목록을 올리지 않았어요. 휴대폰에서 도모 앱을 한 번 열어 주세요.</p>
         ) : (
           <ul className="app-pick-list">
             {visible.map((a) => (

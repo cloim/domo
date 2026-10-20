@@ -194,6 +194,43 @@ public class DomoNotifyPlugin extends Plugin {
         call.resolve();
     }
 
+    /** 로그인 세션과 서버 주소를 넘겨 알림 감시 서비스가 앱 화면 없이 업로드하게 한다. */
+    @PluginMethod
+    public void configureSync(PluginCall call) {
+        store.setSync(call.getString("apiBase", ""), call.getString("token", ""));
+        JSObject r = new JSObject();
+        r.put("deviceId", store.deviceId());
+        r.put("deviceName", (Build.MANUFACTURER + " " + Build.MODEL).trim());
+        r.put("configVersion", store.configVersion());
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void clearSync(PluginCall call) {
+        store.clearSync();
+        call.resolve();
+    }
+
+    /** 서버 사본(대상 앱, 템플릿)을 기기에 적용한다. */
+    @PluginMethod
+    public void applyConfig(PluginCall call) {
+        store.applyConfig(call.getArray("targets", new JSArray()), call.getArray("templates", new JSArray()), call.getInt("version", 0));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setConfigVersion(PluginCall call) {
+        store.setConfigVersion(call.getInt("version", 0));
+        call.resolve();
+    }
+
+    /** 밀린 알림을 지금 올린다. */
+    @PluginMethod
+    public void syncNow(PluginCall call) {
+        NotifySync.kick(getContext());
+        call.resolve();
+    }
+
     private static JSArray toJs(JSONArray array) {
         try {
             return new JSArray(array.toString());

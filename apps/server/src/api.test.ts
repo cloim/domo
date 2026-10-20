@@ -255,6 +255,48 @@ describe("AI 설정과 알림 분석", () => {
   });
 });
 
+describe("알림 연동 기기 동기화", () => {
+  it("기기 등록, 설정 사본 버전, 알림 업로드(중복 없음, 암호화), 다른 계정 차단", async () => {
+    const me = await login("dad@test.com", "아빠");
+    const other = await login("other@test.com", "남");
+    const deviceId = "0b7c6a52-6d0a-4f3e-9a51-2a3b4c5d6e7f";
+
+    expect((await me("PUT", `/api/notify/devices/${deviceId}`, { name: "Pixel 9" })).json()).toEqual({ configVersion: 0 });
+    expect((await other("PUT", `/api/notify/devices/${deviceId}`, { name: "가로채기" })).statusCode).toBe(409);
+    expect((await other("GET", `/api/notify/devices/${deviceId}/config`)).statusCode).toBe(404);
+
+    const config = {
+      targets: [{ packageName: "com.shinhan.card", label: "신한카드", enabled: true, removeOriginal: false }],
+      templates: [
+        { id: "t1", name: "신한카드 승인", packageName: "com.shinhan.card", kind: "expense", pattern: "(?<amount>[\\d,]+)원", paymentMethodId: null, categoryId: null, enabled: true, sampleTitle: "", sampleText: "" },
+      ],
+    };
+    expect((await me("PUT", `/api/notify/devices/${deviceId}/config`, config)).json()).toEqual({ version: 1 });
+    expect((await me("GET", `/api/notify/devices/${deviceId}/config`)).json()).toEqual({ ...config, version: 1 });
+
+    const now = Date.now();
+    const items = [
+      { localId: 1, packageName: "com.shinhan.card", title: "신한카드", text: "승인 12,500원 스타벅스", postedAt: now - 60_000, matchedTemplateId: "t1" },
+      { localId: 2, packageName: "com.shinhan.card", title: "신한카드", text: "명세서 안내", postedAt: now, matchedTemplateId: null },
+      { localId: 3, packageName: "com.shinhan.card", title: "오래된", text: "31일 전", postedAt: now - 31 * 86_400_000, matchedTemplateId: null },
+    ];
+    // 같은 알림을 다시 올려도(재전송) 한 번만 저장하고, 응답의 버전으로 PC 변경을 알아챈다.
+    expect((await me("POST", `/api/notify/devices/${deviceId}/notifications`, { items })).json()).toEqual({ accepted: 3, configVersion: 1 });
+    await me("POST", `/api/notify/devices/${deviceId}/notifications`, { items: items.slice(0, 2) });
+    const list = (await me("GET", `/api/notify/devices/${deviceId}/notifications?packageName=com.shinhan.card`)).json();
+    expect(list.map((n: { id: number; text: string }) => [n.id, n.text])).toEqual([
+      [2, "명세서 안내"],
+      [1, "승인 12,500원 스타벅스"],
+    ]);
+    const raw = await db.execute(sql`SELECT text_enc FROM notify_notifications`);
+    expect(JSON.stringify(raw)).not.toContain("스타벅스");
+
+    await me("PUT", `/api/notify/devices/${deviceId}/apps`, { apps: [{ packageName: "com.shinhan.card", label: "신한카드", launchable: true }] });
+    expect((await me("GET", `/api/notify/devices/${deviceId}/apps`)).json()).toHaveLength(1);
+    expect((await me("GET", "/api/notify/devices")).json()[0]).toMatchObject({ id: deviceId, name: "Pixel 9", targetCount: 1, templateCount: 1, configVersion: 1 });
+  });
+});
+
 describe("개발용 로그인", () => {
   it("터널을 거친 요청은 막는다", async () => {
     const res = await app.inject({ method: "POST", url: "/api/auth/dev", payload: { email: "x@test.com", name: "x" }, headers: { host: "domo.example.com", "cf-connecting-ip": "1.2.3.4" } });

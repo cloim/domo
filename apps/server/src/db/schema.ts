@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, index, integer, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -21,6 +21,38 @@ export const userAiSettings = pgTable("user_ai_settings", {
   keyEnc: text("key_enc"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** 알림 연동을 쓰는 휴대폰. 대상 앱과 템플릿은 기기별 사본을 두고 configVersion 으로 맞춘다. */
+export const notifyDevices = pgTable("notify_devices", {
+  /** 휴대폰이 처음 만든 UUID */
+  id: uuid("id").primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  targets: jsonb("targets").notNull().default([]),
+  templates: jsonb("templates").notNull().default([]),
+  /** 휴대폰이 올린 설치 앱 목록(PC에서 대상 앱을 고를 때 쓴다) */
+  apps: jsonb("apps").notNull().default([]),
+  configVersion: integer("config_version").notNull().default(0),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** 휴대폰이 올린 대상 앱 알림. 제목과 본문은 암호화한다. 30일 지나면 지운다. */
+export const notifyNotifications = pgTable(
+  "notify_notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    deviceId: uuid("device_id").notNull().references(() => notifyDevices.id, { onDelete: "cascade" }),
+    /** 기기 DB의 번호. 같은 알림을 두 번 올려도 한 번만 저장한다. */
+    localId: bigint("local_id", { mode: "number" }).notNull(),
+    packageName: text("package_name").notNull(),
+    titleEnc: text("title_enc").notNull(),
+    textEnc: text("text_enc").notNull(),
+    postedAt: timestamp("posted_at", { withTimezone: true }).notNull(),
+    matchedTemplateId: text("matched_template_id"),
+  },
+  (t) => [uniqueIndex("notify_notifications_device_local_uq").on(t.deviceId, t.localId), index("notify_notifications_device_pkg_idx").on(t.deviceId, t.packageName, t.postedAt)],
+);
 
 /** 모든 가계 데이터의 소유 단위. 이후 자산 모듈도 이 단위에 붙인다. */
 export const households = pgTable("households", {

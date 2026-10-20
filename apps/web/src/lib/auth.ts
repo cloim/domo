@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { SocialLogin } from "@capgo/capacitor-social-login";
 import { api, session } from "./api.ts";
+import { DomoNotify } from "./notify.ts";
 
 export interface AuthConfig {
   googleClientId: string | null;
@@ -28,6 +29,8 @@ export async function nativeGoogleLogin(webClientId: string) {
 
 export async function signOut() {
   session.clear();
+  // 알림 감시 서비스가 로그아웃한 계정으로 업로드하지 않게 세션을 지운다.
+  if (Capacitor.getPlatform() === "android") await DomoNotify.clearSync().catch(() => {});
   if (Capacitor.isNativePlatform()) await SocialLogin.logout({ provider: "google" }).catch(() => {});
   window.dispatchEvent(new Event("domo:signed-out"));
 }

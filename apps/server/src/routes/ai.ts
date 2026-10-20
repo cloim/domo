@@ -1,4 +1,3 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import {
   aiAnalyzeSchema,
   aiConfigSchema,
@@ -17,27 +16,9 @@ import type { Config } from "../config.ts";
 import type { Db } from "../db/client.ts";
 import { userAiSettings } from "../db/schema.ts";
 import { HttpError, parse, userIdOf } from "../http.ts";
+import { decryptSecret, encryptSecret } from "../secret.ts";
 
 const trimSlash = (url: string) => url.replace(/\/+$/, "");
-
-/** API 키 암호화(AES-256-GCM). 키는 AI_SECRET_KEY, 없으면 JWT_SECRET 에서 파생한다. */
-function cryptoKey(config: Config) {
-  return createHash("sha256").update(`${config.aiSecretKey ?? config.jwtSecret}:domo-ai-key`).digest();
-}
-
-export function encryptSecret(config: Config, plain: string): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", cryptoKey(config), iv);
-  const body = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
-  return [iv, cipher.getAuthTag(), body].map((b) => b.toString("base64")).join(".");
-}
-
-function decryptSecret(config: Config, packed: string): string {
-  const [iv, tag, body] = packed.split(".").map((p) => Buffer.from(p, "base64"));
-  const decipher = createDecipheriv("aes-256-gcm", cryptoKey(config), iv!);
-  decipher.setAuthTag(tag!);
-  return Buffer.concat([decipher.update(body!), decipher.final()]).toString("utf8");
-}
 
 /** 서비스가 돌려준 오류 본문에서 사람이 읽을 문구를 꺼낸다. Gemini 스트리밍은 배열로 온다. */
 function errorMessage(data: unknown): string {

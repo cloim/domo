@@ -1,12 +1,15 @@
+import { App as CapApp } from "@capacitor/app";
+import { useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router";
 import { AppShell } from "./components/AppShell.tsx";
 import { session } from "./lib/api.ts";
+import { DomoNotify, notifySupported } from "./lib/notify.ts";
+import { syncNotifyDevice } from "./lib/notifySync.ts";
 import { useMe } from "./lib/queries.ts";
 import { LoginPage } from "./pages/gate/LoginPage.tsx";
 import { OnboardingPage } from "./pages/gate/OnboardingPage.tsx";
 import { pendingInvite } from "./pages/gate/pendingInvite.ts";
-import { DomoNotify, notifySupported } from "./lib/notify.ts";
 import { RecordsPage } from "./pages/records/RecordsPage.tsx";
 import { SettingsPage } from "./pages/settings/SettingsPage.tsx";
 import logoUrl from "./assets/logo.svg";
@@ -65,6 +68,21 @@ function SignedIn() {
     const handle = DomoNotify.addListener("prefill", (prefill) => navigate("/records", { state: { prefill } }));
     return () => void handle.then((h) => h.remove());
   }, [navigate]);
+
+  // 앱을 열거나 돌아올 때 기기 등록, PC에서 바뀐 알림 설정 받기, 밀린 알림 올리기를 한다.
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!notifySupported) return;
+    const run = (uploadApps: boolean) =>
+      syncNotifyDevice({ uploadApps })
+        .then((changed) => {
+          if (changed) void qc.invalidateQueries({ queryKey: ["notify"] });
+        })
+        .catch(() => {}); // 동기화 실패는 화면 사용을 막지 않는다. 다음에 다시 시도한다.
+    void run(true);
+    const resume = CapApp.addListener("resume", () => void run(false));
+    return () => void resume.then((h) => h.remove());
+  }, [qc]);
 
   if (me.isPending) return <Splash />;
   if (me.isError) {

@@ -58,6 +58,11 @@ interface DomoNotifyPlugin {
   setTemplates(options: { templates: NotifyTemplate[] }): Promise<void>;
   getNotifications(options: { packageName?: string; limit?: number }): Promise<{ notifications: CapturedNotification[] }>;
   clearNotifications(options: { packageName: string }): Promise<void>;
+  configureSync(options: { apiBase: string; token: string }): Promise<{ deviceId: string; deviceName: string; configVersion: number }>;
+  clearSync(): Promise<void>;
+  applyConfig(options: { targets: NotifyTarget[]; templates: NotifyTemplate[]; version: number }): Promise<void>;
+  setConfigVersion(options: { version: number }): Promise<void>;
+  syncNow(): Promise<void>;
   addListener(event: "prefill", handler: (data: NotifyPrefill) => void): Promise<PluginListenerHandle>;
 }
 

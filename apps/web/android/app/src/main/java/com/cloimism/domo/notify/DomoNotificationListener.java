@@ -80,6 +80,8 @@ public class DomoNotificationListener extends NotificationListenerService {
             break;
         }
         store.insertNotification(sbn.getPackageName(), title, body, postedAt, matchedId);
+        // PC에서도 볼 수 있게 바로 서버에 올린다. 실패분은 다음 알림 때 함께 보낸다.
+        NotifySync.kick(this);
     }
 
     private static String text(CharSequence value) {

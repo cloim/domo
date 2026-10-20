@@ -46,8 +46,8 @@ const GROUPS: { title: string; items: Section[] }[] = [
   {
     title: "자동 기록",
     items: [
-      { id: "notify", label: "알림 연동", icon: BellRing, fill: true, nativeOnly: true, render: () => <NotifySection /> },
-      { id: "notify-templates", label: "알림 템플릿", icon: Wand2, fill: true, nativeOnly: true, render: () => <TemplatesSection /> },
+      { id: "notify", label: "알림 연동", icon: BellRing, fill: true, render: () => <NotifySection /> },
+      { id: "notify-templates", label: "알림 템플릿", icon: Wand2, fill: true, render: () => <TemplatesSection /> },
       { id: "ai", label: "AI 설정", icon: Bot, render: () => <AiSection /> },
     ],
   },
