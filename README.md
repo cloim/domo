@@ -43,7 +43,7 @@ pnpm build:check                   # 검증 빌드는 release/web-check, 운영 
 
 ## 안드로이드 릴리스
 
-루트 `package.json`의 `version`을 올린 뒤 실행합니다. 서명 키는 저장소 밖 속성 파일(`DOMO_SIGNING_PROPERTIES`)에서 읽습니다.
+루트 `package.json`의 `version`을 올린 뒤 실행합니다. 서명 키는 저장소 밖 속성 파일(`DOMO_SIGNING_PROPERTIES`)에서 읽습니다. 네이티브 빌드에는 `VITE_API_BASE`로 운영 API의 HTTPS 주소를 지정합니다. 로컬 설정값은 저장소에 커밋하지 않습니다.
 
 ```bash
 pnpm release:android -- --notes "변경 내용"
