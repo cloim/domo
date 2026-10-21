@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const web = join(root, "apps", "web");
@@ -15,6 +16,17 @@ const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const notesIndex = args.indexOf("--notes");
 const notes = notesIndex >= 0 ? args[notesIndex + 1] : `도모 ${tag}`;
+
+// 운영 주소는 Git에서 제외한 루트 .env에서 읽고, Vite 빌드에 명시적으로 주입한다.
+const { PUBLIC_URL } = parseEnv(readFileSync(join(root, ".env"), "utf8"));
+const apiUrl = new URL(PUBLIC_URL);
+if (apiUrl.protocol !== "https:" || apiUrl.hostname === "example.com" || apiUrl.hostname.endsWith(".example.com") || apiUrl.username || apiUrl.password || apiUrl.pathname !== "/" || apiUrl.search || apiUrl.hash) {
+  throw new Error(".env의 PUBLIC_URL에 실제 운영 서버의 HTTPS 출처를 설정해 주세요.");
+}
+process.env.VITE_API_BASE = apiUrl.origin;
+// 운영 웹 출력(dist)을 보호하고 APK 전용 웹 출력을 동기화한다.
+const mobileWeb = join(root, "release", "android-web");
+process.env.DOMO_WEB_DIR = mobileWeb;
 
 // Windows의 .cmd/.bat(pnpm, npx, gradlew)은 셸이 필요하고, 셸을 쓰면 띄어쓰기 인수가 쪼개지므로 gh 같은 실행 파일은 셸 없이 부른다.
 const run = (cmd, cmdArgs, cwd, shell = process.platform === "win32") => {
@@ -32,7 +44,8 @@ const existing = (() => {
 })();
 if (existing && !dryRun) throw new Error(`${tag} 릴리스가 이미 있습니다. package.json 버전을 올려 주세요.`);
 
-run("pnpm", ["--filter", "@domo/web", "build"], root);
+run("pnpm", ["--filter", "@domo/web", "typecheck"], root);
+run("pnpm", ["--filter", "@domo/web", "exec", "vite", "build", "--outDir", mobileWeb, "--emptyOutDir"], root);
 run("npx", ["cap", "sync", "android"], web);
 run(process.platform === "win32" ? "gradlew.bat" : "./gradlew", ["assembleRelease", "--no-daemon", "-q"], android);
 
