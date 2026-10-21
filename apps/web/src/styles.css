@@ -792,3 +792,19 @@ button.rank-row:hover { background: var(--hover); }
   :root:not([data-theme="light"]) .ink-calendar .ink-day { color: #fff; }
   :root:not([data-theme="light"]) .ink-calendar .ink-day[data-bright="true"] { color: #000; }
 }
+
+/* 홈 화면 위젯 설정 */
+.widget-settings { display: flex; flex-direction: column; gap: var(--field-gap); }
+.widget-settings > .btn { align-self: flex-start; }
+.widget-preview-stage { padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: repeating-conic-gradient(#d8d3cb 0% 25%, #eeeae3 0% 50%) 0 / 20px 20px; }
+.widget-preview { position: relative; display: flex; flex-direction: column; gap: 6px; min-height: 180px; padding: 20px; color: #5b5247; }
+.widget-preview-background { position: absolute; inset: 0; border-radius: 20px; }
+.widget-preview > :not(.widget-preview-background) { position: relative; }
+.widget-preview > strong { color: #1f1a14; font-size: 22px; }
+.widget-preview > small { flex: 1; }
+.widget-preview-add { display: flex; align-items: center; min-height: 44px; color: #c2512f; }
+.widget-preview.is-dark { color: #e3dacb; }
+.widget-preview.is-dark > strong { color: #fffdf8; }
+.widget-preview.is-dark .widget-preview-add { color: #ffb59c; }
+.widget-color-input { width: 64px; height: 44px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; }
+.widget-settings input[type="range"] { width: 100%; min-height: 44px; accent-color: var(--accent); }

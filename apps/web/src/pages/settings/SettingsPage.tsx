@@ -1,8 +1,9 @@
-import { BellRing, Bot, ChevronRight, CreditCard, History, House, Info, Repeat, Shapes, Wand2 } from "lucide-react";
+import { BellRing, Bot, ChevronRight, CreditCard, History, House, Info, Repeat, Shapes, Smartphone, Wand2 } from "lucide-react";
 import { Navigate, NavLink, useOutletContext, useParams } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
 import { useHousehold, type Me } from "../../lib/queries.ts";
 import { useMedia } from "../../lib/useMedia.ts";
+import { WidgetSection } from "./WidgetSection.tsx";
 import { AppSection } from "./AppSection.tsx";
 import { CategoriesSection } from "./CategoriesSection.tsx";
 import { FixedExpensesSection } from "./FixedExpensesSection.tsx";
@@ -51,7 +52,7 @@ const GROUPS: { title: string; items: Section[] }[] = [
       { id: "ai", label: "AI 설정", icon: Bot, render: () => <AiSection /> },
     ],
   },
-  { title: "앱", items: [{ id: "app", label: "앱 정보와 업데이트", icon: Info, render: () => <AppSection /> }] },
+  { title: "앱", items: [{ id: "widget", label: "위젯", icon: Smartphone, nativeOnly: true, render: () => <WidgetSection /> }, { id: "app", label: "앱 정보와 업데이트", icon: Info, render: () => <AppSection /> }] },
 ];
 
 const DEFAULT_SECTION = "household";

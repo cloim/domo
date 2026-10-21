@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.graphics.Color;
 import android.widget.RemoteViews;
 import com.cloimism.domo.MainActivity;
 import com.cloimism.domo.R;
@@ -32,6 +33,15 @@ public class DomoWidgetProvider extends AppWidgetProvider {
         for (int id : ids) {
             SharedPreferences data = prefs(context);
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.domo_widget);
+            int background = Color.parseColor(data.getString("backgroundColor", "#fffdf8"));
+            int transparency = data.getInt("transparency", 0);
+            views.setInt(R.id.widget_background, "setColorFilter", background);
+            views.setInt(R.id.widget_background, "setImageAlpha", Math.round(255 * (100 - transparency) / 100f));
+            boolean dark = (Color.red(background) * 299 + Color.green(background) * 587 + Color.blue(background) * 114) < 150000;
+            views.setTextColor(R.id.widget_title, Color.parseColor(dark ? "#e3dacb" : "#5b5247"));
+            views.setTextColor(R.id.widget_balance, Color.parseColor(dark ? "#fffdf8" : "#1f1a14"));
+            views.setTextColor(R.id.widget_updated, Color.parseColor(dark ? "#e3dacb" : "#5b5247"));
+            views.setTextColor(R.id.widget_add, Color.parseColor(dark ? "#ffb59c" : "#c2512f"));
             String month = data.getString("month", "");
             views.setTextViewText(R.id.widget_title, month.isEmpty() ? "도모" : month + " 월 잔액");
             views.setTextViewText(R.id.widget_balance, month.isEmpty() ? "앱에서 로그인해 주세요" : NumberFormat.getIntegerInstance(Locale.KOREA).format(data.getLong("balance", 0)) + "원");
