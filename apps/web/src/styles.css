@@ -672,6 +672,7 @@ button.rank-row:hover { background: var(--hover); }
 .notification-history-page .notify-body { overflow-wrap: anywhere; }
 .notification-history-text { color: var(--ink-2); white-space: pre-line; word-break: break-all; }
 .notify-template-action { flex: none; align-self: flex-start; }
+.notification-history-actions { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 8px; }
 .notify-body { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; font-size: 14px; }
 .notify-body > span:first-of-type { color: var(--ink-2); white-space: pre-line; word-break: break-all; }
 .app-pick-list { max-height: 50vh; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
