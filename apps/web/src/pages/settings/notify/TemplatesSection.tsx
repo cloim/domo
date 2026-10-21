@@ -51,7 +51,7 @@ export function TemplatesSection() {
             <span className="skeleton" style={{ display: "block", height: 112, margin: "0 8px" }} />
           ) : list.length === 0 ? (
             <p className="hint" style={{ padding: "12px 10px" }}>
-              알림 연동에서 대상 앱의 알림을 골라 템플릿을 만들면, 같은 형식의 알림이 올 때 도모 등록 알림이 떠요.
+              알림 이력에서 알림을 골라 템플릿을 만들면, 같은 형식의 알림이 올 때 도모 등록 알림이 떠요.
             </p>
           ) : (
             list.map((t) => (
@@ -128,10 +128,10 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
   const [aiProblem, setAiProblem] = useState<string | null>(null);
   const set = <K extends keyof NotifyTemplate>(key: K, value: NotifyTemplate[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
-  const recent = useNotifications(source, draft.packageName, 200);
+  const recent = useNotifications(source, draft.packageName, 500);
   const ai = useAiSettings();
 
-  // 알림 연동 화면에서 '템플릿 만들기'로 들어오면 그 알림을 예시로 채운다.
+  // 알림 이력 화면에서 '템플릿 만들기'로 들어오면 그 알림을 예시로 채운다.
   useEffect(() => {
     if (template || !fromId || !recent.data) return;
     const n = recent.data.find((x) => x.id === fromId);

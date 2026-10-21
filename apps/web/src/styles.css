@@ -657,9 +657,10 @@ button.rank-row:hover { background: var(--hover); }
 .notify-detail { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .notify-detail > .md-detail-body { flex: 1; min-height: 0; overflow-y: auto; }
 .notify-detail > .md-detail-body > .field:first-child { flex: none; }
-.notify-history { flex: 1; min-height: 120px; }
-.notify-history > .field-label { flex: none; }
-.notify-history > .notify-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
+.notification-history-page { display: flex; flex-direction: column; gap: 16px; height: 100%; min-height: 0; padding: 20px var(--gutter); }
+.notification-history-head { flex: none; display: flex; flex-direction: column; gap: 12px; }
+.notification-history-head > p { margin: 0; }
+.notification-history-page > .notify-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
 .app-icon { flex: none; width: 34px; height: 34px; border-radius: 9px; }
 .notify-alert { display: flex; gap: 10px; padding: 12px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--ink); }
 .notify-alert svg { flex: none; margin-top: 2px; color: var(--accent); }
@@ -667,8 +668,9 @@ button.rank-row:hover { background: var(--hover); }
 .notify-list { margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); list-style: none; }
 .notify-list > li { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; }
 .notify-list > li + li { border-top: 1px solid var(--line); }
-.notify-history .notify-list > li { position: relative; align-items: flex-start; }
-.notify-history .notify-body { overflow-wrap: anywhere; }
+.notification-history-page .notify-list > li { position: relative; align-items: flex-start; }
+.notification-history-page .notify-body { overflow-wrap: anywhere; }
+.notification-history-text { color: var(--ink-2); white-space: pre-line; word-break: break-all; }
 .notify-template-action { flex: none; align-self: flex-start; }
 .notify-body { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; font-size: 14px; }
 .notify-body > span:first-of-type { color: var(--ink-2); white-space: pre-line; word-break: break-all; }

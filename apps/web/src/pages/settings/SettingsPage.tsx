@@ -1,4 +1,4 @@
-import { BellRing, Bot, ChevronRight, CreditCard, House, Info, Repeat, Shapes, Wand2 } from "lucide-react";
+import { BellRing, Bot, ChevronRight, CreditCard, History, House, Info, Repeat, Shapes, Wand2 } from "lucide-react";
 import { Navigate, NavLink, useOutletContext, useParams } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
 import { useHousehold, type Me } from "../../lib/queries.ts";
@@ -7,6 +7,7 @@ import { AppSection } from "./AppSection.tsx";
 import { CategoriesSection } from "./CategoriesSection.tsx";
 import { FixedExpensesSection } from "./FixedExpensesSection.tsx";
 import { AiSection } from "./notify/AiSection.tsx";
+import { NotificationHistorySection } from "./notify/NotificationHistorySection.tsx";
 import { NotifySection } from "./notify/NotifySection.tsx";
 import { TemplatesSection } from "./notify/TemplatesSection.tsx";
 import { notifySupported } from "../../lib/notify.ts";
@@ -45,6 +46,7 @@ const GROUPS: { title: string; items: Section[] }[] = [
     title: "자동 기록",
     items: [
       { id: "notify", label: "알림 연동", icon: BellRing, fill: true, render: () => <NotifySection /> },
+      { id: "notify-history", label: "알림 이력", icon: History, fill: true, render: () => <NotificationHistorySection /> },
       { id: "notify-templates", label: "알림 템플릿", icon: Wand2, fill: true, render: () => <TemplatesSection /> },
       { id: "ai", label: "AI 설정", icon: Bot, render: () => <AiSection /> },
     ],

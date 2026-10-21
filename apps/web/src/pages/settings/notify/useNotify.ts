@@ -60,7 +60,7 @@ export const notifyKeys = {
   all: ["notify"] as const,
   status: ["notify", "status"] as const,
   config: (src: NotifySource | null) => ["notify", "config", srcKey(src)] as const,
-  notifications: (src: NotifySource | null, pkg: string) => ["notify", "notifications", srcKey(src), pkg] as const,
+  notifications: (src: NotifySource | null, pkg: string, limit: number) => ["notify", "notifications", srcKey(src), pkg, limit] as const,
   apps: (src: NotifySource | null) => ["notify", "apps", srcKey(src)] as const,
   icons: (src: NotifySource | null, pkgs: string[]) => ["notify", "icons", srcKey(src), ...pkgs] as const,
 };
@@ -122,15 +122,15 @@ export function useSaveTemplates(src: NotifySource | null) {
   return { ...m, mutateAsync: (templates: NotifyTemplate[]) => m.mutateAsync({ templates }) };
 }
 
-export function useNotifications(src: NotifySource | null, packageName: string, limit = 100, refetch = false) {
+export function useNotifications(src: NotifySource | null, packageName: string = "", limit = 100, refetch = false) {
   return useQuery({
-    queryKey: notifyKeys.notifications(src, packageName),
-    enabled: !!src && !!packageName,
+    queryKey: notifyKeys.notifications(src, packageName, limit),
+    enabled: !!src,
     refetchInterval: refetch ? 15_000 : false,
     queryFn: async (): Promise<CapturedNotification[]> => {
       const items = src!.kind === "local"
-        ? (await DomoNotify.getNotifications({ packageName, limit })).notifications
-        : await api<CapturedNotification[]>(`/api/notify/devices/${src!.deviceId}/notifications?packageName=${encodeURIComponent(packageName)}&limit=${limit}`);
+        ? (await DomoNotify.getNotifications({ ...(packageName ? { packageName } : {}), limit })).notifications
+        : await api<CapturedNotification[]>(`/api/notify/devices/${src!.deviceId}/notifications?limit=${limit}${packageName ? `&packageName=${encodeURIComponent(packageName)}` : ""}`);
       return groupNotificationHistory(items);
     },
   });

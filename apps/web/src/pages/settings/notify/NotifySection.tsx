@@ -1,31 +1,27 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { BellRing, ChevronLeft, Plus, Search, ShieldAlert, Smartphone, Trash2, Wand2 } from "lucide-react";
+import { BellRing, ChevronLeft, Plus, Search, ShieldAlert, Smartphone, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { useDialog } from "../../../components/Dialogs.tsx";
 import { Modal } from "../../../components/Modal/index.js";
 import SelectControl from "../../../components/SelectControl/index.ts";
-import { NotificationFields } from "./NotificationFields.tsx";
 import { DomoNotify, notifyHealth, notifySupported, type InstalledApp, type NotifyTarget } from "../../../lib/notify.ts";
 import { MD_TWO_PANE, useMedia } from "../../../lib/useMedia.ts";
 import {
   clearNotifications,
   notifyKeys,
   pickDevice,
-  toLocalDateTime,
   useAppIcons,
   useDevices,
   useInstalledApps,
-  useNotifications,
   useNotifyStatus,
   useNotifySource,
   useSaveTargets,
   useTargets,
-  useTemplates,
   type NotifySource,
 } from "./useNotify.ts";
 
-/** 설정 > 자동 기록 > 알림 연동: 감시 대상 앱과 앱별 최근 알림. PC에서는 휴대폰을 골라 본다. */
+/** 설정 > 자동 기록 > 알림 연동: 감시 대상 앱과 앱별 설정. PC에서는 휴대폰을 골라 본다. */
 export function NotifySection() {
   const dialog = useDialog();
   const [params, setParams] = useSearchParams();
@@ -108,7 +104,7 @@ export function NotifySection() {
               </button>
             ))
           )}
-          {health === "idle" && list.length > 0 && <p className="hint" style={{ padding: "12px 10px" }}>템플릿을 만들어야 등록 알림이 떠요. 앱을 골라 알림에서 템플릿을 만들어 주세요.</p>}
+          {health === "idle" && list.length > 0 && <p className="hint" style={{ padding: "12px 10px" }}>템플릿을 만들어야 등록 알림이 떠요. 알림 이력에서 알림을 골라 템플릿을 만들어 주세요.</p>}
         </div>
         <div className="md-list-foot">
           <button type="button" className="btn btn-primary btn-block" onClick={() => setPicking(true)}>
@@ -119,7 +115,7 @@ export function NotifySection() {
 
       <section className="md-detail" aria-label="대상 앱 상세">
         {selected ? (
-          <TargetDetail source={source} target={selected} icon={icons.data?.[selected.packageName]} onBack={() => select(null)} onUpdate={(p) => update(selected.packageName, p)} onRemove={() => void removeTarget(selected)} />
+          <TargetDetail target={selected} icon={icons.data?.[selected.packageName]} onBack={() => select(null)} onUpdate={(p) => update(selected.packageName, p)} onRemove={() => void removeTarget(selected)} />
         ) : (
           <div className="md-empty">대상 앱을 골라 주세요.</div>
         )}
@@ -215,7 +211,6 @@ export function AppIcon({ src }: { src?: string }) {
 }
 
 interface DetailProps {
-  source: NotifySource;
   target: NotifyTarget;
   icon?: string;
   onBack: () => void;
@@ -223,11 +218,7 @@ interface DetailProps {
   onRemove: () => void;
 }
 
-function TargetDetail({ source, target, icon, onBack, onUpdate, onRemove }: DetailProps) {
-  const navigate = useNavigate();
-  const templates = useTemplates(source);
-  const notifications = useNotifications(source, target.packageName, 100, true);
-  const templateName = (id: string | null) => templates.data?.find((t) => t.id === id)?.name;
+function TargetDetail({ target, icon, onBack, onUpdate, onRemove }: DetailProps) {
 
   return (
     <div className="notify-detail">
@@ -261,47 +252,7 @@ function TargetDetail({ source, target, icon, onBack, onUpdate, onRemove }: Deta
           </div>
         </div>
 
-        <section className="field notify-history" aria-labelledby="notify-recent">
-          <h3 id="notify-recent" className="field-label" style={{ margin: 0 }}>
-            최근 알림
-          </h3>
-          {notifications.isPending ? (
-            <span className="skeleton" style={{ display: "block", height: 120 }} />
-          ) : notifications.isError ? (
-            <div className="readonly-note is-bad" role="alert">
-              알림 이력을 불러오지 못했어요. {(notifications.error as Error).message}
-            </div>
-          ) : (notifications.data ?? []).length === 0 ? (
-            <p className="hint">아직 받은 알림이 없어요. 이 앱에서 알림이 오면 여기에 쌓입니다(최근 30일).</p>
-          ) : (
-            <ul className="notify-list" tabIndex={0} aria-labelledby="notify-recent">
-              {notifications.data!.map((n) => (
-                <li key={n.id}>
-                  <div className="notify-body">
-                    <strong>{n.title}</strong>
-                    <span>{n.text}</span>
-                    <span className="hint">{toLocalDateTime(n.postedAt).replace("T", " ")}</span>
-                    {(n.duplicateCount ?? 1) > 1 && <span className="hint">동일 수신 기록 {n.duplicateCount}건을 합쳐 표시했어요.</span>}
-                    <NotificationFields notification={n} />
-                  </div>
-                  {n.matchedTemplateId && templateName(n.matchedTemplateId) ? (
-                    <span className="badge badge-accent">{templateName(n.matchedTemplateId)}</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="icon-btn notify-template-action"
-                      aria-label={`${n.title || "알림"} 템플릿 만들기`}
-                      title="템플릿 만들기"
-                      onClick={() => navigate(`/settings/notify-templates?id=new&from=${n.id}&app=${encodeURIComponent(n.packageName)}`)}
-                    >
-                      <Wand2 size={17} aria-hidden="true" />
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+
       </div>
     </div>
   );
