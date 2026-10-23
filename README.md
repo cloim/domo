@@ -29,6 +29,15 @@ pnpm test                          # 테스트는 domo_test DB
 pnpm build:check                   # 검증 빌드는 release/web-check, 운영 웹 출력과 분리
 ```
 
+### StackPad 패드 구성
+
+- **운영 패드 (Domo)**: `cloimism` 패드셋 (슬롯 5)
+  - `Server`: 포트 `4300` (`pnpm start`, 웹 빌드 서빙 및 API 제공, `https://domo.cloimism.com` 연결)
+  - DB는 독립 Docker 컨테이너(`domo-db`, 포트 5434)로 상시 구동
+- **개발 패드 (Domo Dev)**: `개발` 패드셋 (슬롯 9)
+  - `Server`: 개발 API 포트 `4310` (`pnpm dev`, `domo_dev` DB 연결)
+  - `Web`: 개발 화면 포트 `5173` (`pnpm dev`, Vite HMR 지원 및 `http://localhost:5173`)
+
 ## 가족 가계부 개선
 
 입출기록 상단의 검색에서 전체 기간의 거래처, 메모, 금액과 구성원으로 기록을 찾습니다. 거래처 추천은 전체 기간을 사용하고, 추천을 선택하면 분류, 지출수단과 빈 금액을 채웁니다.
