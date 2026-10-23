@@ -117,6 +117,7 @@ export function CategoriesSection() {
         </div>
         <form
           className="md-list-foot inline-form"
+          style={{ paddingBlock: 12 }}
           onSubmit={(e) => {
             e.preventDefault();
             if (newParent.trim())
