@@ -57,6 +57,18 @@ export const notifyNotifications = pgTable(
   (t) => [uniqueIndex("notify_notifications_device_local_uq").on(t.deviceId, t.localId), uniqueIndex("notify_notifications_device_event_uq").on(t.deviceId, t.eventKey), index("notify_notifications_device_pkg_idx").on(t.deviceId, t.packageName, t.postedAt)],
 );
 
+/** 처리 대기함은 알림 원문 이력의 보관 기간과 별도로 관리한다. */
+export const notifyRegistrations = pgTable("notify_registrations", {
+  id: text("id").primaryKey(),
+  deviceId: uuid("device_id").notNull().references(() => notifyDevices.id, { onDelete: "cascade" }),
+  eventKey: text("event_key").notNull(),
+  packageName: text("package_name").notNull(),
+  postedAt: timestamp("posted_at", { withTimezone: true }).notNull(),
+  prefillEnc: text("prefill_enc").notNull(),
+  status: text("status", { enum: ["pending", "registered", "excluded"] }).notNull().default("pending"),
+  transactionId: uuid("transaction_id"),
+}, (t) => [index("notify_registrations_device_status_idx").on(t.deviceId, t.status)]);
+
 /** 모든 가계 데이터의 소유 단위. 이후 자산 모듈도 이 단위에 붙인다. */
 export const households = pgTable("households", {
   id: uuid("id").primaryKey().defaultRandom(),

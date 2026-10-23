@@ -23,6 +23,9 @@ import { useMedia, WIDE_EDITOR } from "../../lib/useMedia.ts";
 import { EntryForm, type EntryPrefill, type Suggestion } from "./EntryForm.tsx";
 import { CardSettlementDialog } from "./CardSettlementDialog.tsx";
 import { RecordBudgets } from "../../components/RecordBudgets.tsx";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "../../lib/api.ts";
+import { finishPendingRegistration, pendingKey, usePendingRegistrations, type PendingRegistration } from "../../lib/notifyPending.ts";
 
 const KINDS: { kind: TransactionKind; label: string }[] = [
   { kind: "expense", label: "지출" },
@@ -48,11 +51,20 @@ export function RecordsPage() {
   const [prefill, setPrefill] = useState<EntryPrefill | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const pending = usePendingRegistrations();
+  const [pendingItem, setPendingItem] = useState<PendingRegistration | null>(null);
 
   // 등록 알림을 눌러 들어오면 그 달과 탭으로 옮기고 채워진 입력 화면을 연다.
   useEffect(() => {
     const incoming = (location.state as { prefill?: EntryPrefill } | null)?.prefill;
     if (!incoming) return;
+    const stateItem = (location.state as { pending?: PendingRegistration } | null)?.pending;
+    const cachedItem = pending.data?.find((item) => item.id === incoming.pendingId);
+    setPendingItem(stateItem ?? cachedItem ?? (incoming.pendingId ? {
+      id: incoming.pendingId, deviceId: incoming.pendingId.split(":")[0]!, eventKey: incoming.pendingId.split(":")[1]!,
+      packageName: "", postedAt: Date.now(), prefill: incoming,
+    } : null));
     setPrefill(incoming);
     setSelectedId(null);
     if (!wide) setSheetOpen(true);
@@ -102,12 +114,18 @@ export function RecordsPage() {
   }, [params, txs.data, wide, setParams]);
 
   function openEntry(id: string | null) {
+    setPendingItem(null);
     setPrefill(null);
     setSelectedId(id);
     if (!wide) setSheetOpen(true);
   }
 
-  function onDone(saved: Transaction | null) {
+  async function onDone(saved: Transaction | null) {
+    if (pendingItem && saved) {
+      setFlashId(saved.id);
+      await advancePending("registered");
+      return;
+    }
     setPrefill(null);
     setSheetOpen(false);
     setSelectedId(null);
@@ -119,12 +137,38 @@ export function RecordsPage() {
     }
   }
 
+  async function advancePending(status: "registered" | "excluded") {
+    if (!pendingItem) return;
+    await finishPendingRegistration(qc, pendingItem, status);
+    let remaining = qc.getQueryData<PendingRegistration[]>(pendingKey);
+    // 시스템 알림에서 바로 진입해 목록 조회보다 먼저 저장한 경우도 이어서 처리한다.
+    if (!remaining?.length) {
+      remaining = await api<PendingRegistration[]>("/api/notify/registrations").catch(() => remaining);
+      if (remaining) qc.setQueryData(pendingKey, remaining);
+    }
+    const next = remaining?.find((item) => item.id !== pendingItem.id);
+    if (next) {
+      navigate("/records", { replace: true, state: { prefill: { ...next.prefill, pendingId: next.id }, pending: next } });
+    } else {
+      setPendingItem(null);
+      setPrefill(null);
+      setSheetOpen(false);
+      setSelectedId(null);
+    }
+  }
+
+  async function excludePending() {
+    if (!pendingItem) return;
+    await api("/api/notify/registrations/exclude", { method: "POST", body: { id: pendingItem.id } });
+    await advancePending("excluded");
+  }
+
   const data = household.data;
   const canEdit = (t: Transaction | null) => !t || !data || canEditTransaction({ memberId: data.me.memberId, role: data.me.role }, t);
   const form = data && (
-    <EntryForm data={data} kind={kind} transaction={selected} prefill={selected ? null : prefill} canEdit={canEdit(selected)} suggestions={suggestions} onDone={onDone} />
+    <EntryForm data={data} kind={kind} transaction={selected} prefill={selected ? null : prefill} canEdit={canEdit(selected)} suggestions={suggestions} onDone={onDone} onExclude={pendingItem && !selected ? excludePending : undefined} />
   );
-  const formTitle = selected ? (canEdit(selected) ? "기록 수정" : "기록 보기") : "새 기록";
+  const formTitle = selected ? (canEdit(selected) ? "기록 수정" : "기록 보기") : pendingItem ? "대기 알림 등록" : "새 기록";
 
   return (
     <>

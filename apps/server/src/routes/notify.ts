@@ -1,10 +1,10 @@
-import { NOTIFY_KEEP_DAYS, notifyAppsSchema, notifyDeviceConfigSchema, notifyUploadSchema } from "@domo/core";
+import { NOTIFY_KEEP_DAYS, notifyAppsSchema, notifyDeviceConfigSchema, notifyUploadSchema, notifyRegistrationsSchema } from "@domo/core";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Config } from "../config.ts";
 import type { Db } from "../db/client.ts";
-import { notifyDevices, notifyNotifications } from "../db/schema.ts";
+import { notifyDevices, notifyNotifications, notifyRegistrations } from "../db/schema.ts";
 import { HttpError, parse, userIdOf } from "../http.ts";
 import { decryptSecret, encryptSecret } from "../secret.ts";
 
@@ -76,6 +76,46 @@ export async function notifyRoutes(app: FastifyInstance, { db, config }: { db: D
   });
 
   app.get("/api/notify/devices/:id/apps", async (req) => (await myDevice(req)).apps);
+
+  // 재전송해도 처리 상태와 수신 당시 추출값을 유지한다.
+  app.post("/api/notify/devices/:id/registrations", async (req) => {
+    const device = await myDevice(req);
+    const { items } = parse(notifyRegistrationsSchema, req.body);
+    const states = await db.transaction(async (tx) => {
+      const results = [];
+      for (const item of items) {
+        const id = `${device.id}:${item.eventKey}`;
+        await tx.insert(notifyRegistrations).values({ id, deviceId: device.id, eventKey: item.eventKey,
+          packageName: item.packageName, postedAt: new Date(item.postedAt), prefillEnc: encryptSecret(config, JSON.stringify(item.prefill)),
+        }).onConflictDoNothing();
+        const [row] = await tx.select({ status: notifyRegistrations.status }).from(notifyRegistrations).where(eq(notifyRegistrations.id, id));
+        results.push({ eventKey: item.eventKey, status: row!.status });
+      }
+      return results;
+    });
+    return { states };
+  });
+
+  app.get("/api/notify/registrations", async (req) => {
+    const rows = await db.select({ registration: notifyRegistrations, deviceName: notifyDevices.name })
+      .from(notifyRegistrations).innerJoin(notifyDevices, eq(notifyDevices.id, notifyRegistrations.deviceId))
+      .where(and(eq(notifyDevices.userId, userIdOf(req)), eq(notifyRegistrations.status, "pending")))
+      .orderBy(desc(notifyRegistrations.postedAt), desc(notifyRegistrations.id));
+    return rows.map(({ registration: r, deviceName }) => ({ id: r.id, deviceId: r.deviceId, eventKey: r.eventKey,
+      deviceName, packageName: r.packageName, postedAt: r.postedAt.getTime(), prefill: JSON.parse(decryptSecret(config, r.prefillEnc)) }));
+  });
+
+  app.post("/api/notify/registrations/exclude", async (req) => {
+    const { id } = parse(z.object({ id: z.string().min(1).max(101) }), req.body);
+    const [owned] = await db.select({ id: notifyRegistrations.id }).from(notifyRegistrations)
+      .innerJoin(notifyDevices, eq(notifyDevices.id, notifyRegistrations.deviceId))
+      .where(and(eq(notifyRegistrations.id, id), eq(notifyDevices.userId, userIdOf(req))));
+    if (!owned) throw new HttpError(404, "대기 건을 찾을 수 없습니다.");
+    const [row] = await db.update(notifyRegistrations).set({ status: "excluded" })
+      .where(and(eq(notifyRegistrations.id, id), eq(notifyRegistrations.status, "pending"))).returning();
+    if (!row) throw new HttpError(409, "이미 처리된 알림입니다. 대기 목록을 새로 확인해 주세요.");
+    return { ok: true };
+  });
 
   /** 휴대폰의 알림 감시 서비스가 받은 알림을 올린다. 응답의 configVersion 으로 PC에서 바뀐 설정을 알아챈다. */
   app.post("/api/notify/devices/:id/notifications", async (req) => {

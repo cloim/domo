@@ -5,6 +5,7 @@ import { notifySupported, type CapturedNotification } from "../../../lib/notify.
 import { matchNotificationHistory } from "../../../lib/notifyHistory.ts";
 import { AppIcon, DeviceSelect, NoDevice } from "./NotifySection.tsx";
 import { NotificationFields } from "./NotificationFields.tsx";
+import { usePendingRegistrations } from "../../../lib/notifyPending.ts";
 import { toLocalDateTime, useAppIcons, useInstalledApps, useNotifications, useNotifySource, useTargets, useTemplates } from "./useNotify.ts";
 
 /** 설정 > 자동 기록 > 알림 이력: 모든 대상 앱의 알림을 최신순으로 모은다. */
@@ -16,11 +17,17 @@ export function NotificationHistorySection() {
   const targets = useTargets(source);
   const apps = useInstalledApps(source);
   const templates = useTemplates(source);
+  const pending = usePendingRegistrations();
   const items = notifications.data ?? [];
   const icons = useAppIcons(source, [...new Set(items.map((n) => n.packageName))]);
   const appName = (pkg: string) => targets.data?.find((t) => t.packageName === pkg)?.label ?? apps.data?.find((a) => a.packageName === pkg)?.label ?? pkg;
 
   async function register(n: CapturedNotification) {
+    const waiting = pending.data?.find((item) => item.deviceId === source?.deviceId && item.eventKey === n.eventKey);
+    if (waiting) {
+      navigate("/records", { state: { prefill: { ...waiting.prefill, pendingId: waiting.id }, pending: waiting } });
+      return;
+    }
     if (!templates.data) {
       await dialog.alert("패턴을 확인해 주세요", templates.error?.message ?? "패턴을 불러오는 중이에요. 잠시 후 다시 시도해 주세요.");
       return;

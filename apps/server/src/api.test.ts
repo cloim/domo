@@ -256,6 +256,40 @@ describe("AI 설정과 알림 분석", () => {
 });
 
 describe("알림 연동 기기 동기화", () => {
+  it("대기 건을 보존하고 본인만 처리하며 동시 등록과 재전송에도 거래를 하나만 만든다", async () => {
+    const me = await login("pending@test.com", "대기 테스트");
+    const other = await login("pending-other@test.com", "다른 계정");
+    await me("POST", "/api/households", { name: "대기함 테스트" });
+    const household = (await me("GET", "/api/household")).json();
+    const category = household.categories.find((c: { parentId: string | null; kind: string }) => c.parentId && c.kind === "expense");
+    const deviceId = crypto.randomUUID();
+    await me("PUT", `/api/notify/devices/${deviceId}`, { name: "테스트 휴대폰" });
+    const prefill = { kind: "expense", amount: 12000, counterparty: "대기 거래처", memo: null,
+      occurredAt: "2026-10-20T12:30", paymentMethodId: household.paymentMethods[0].id, categoryId: category.id };
+    const items = ["a", "b", "c"].map((key) => ({ eventKey: key.repeat(64), packageName: "test.bank", postedAt: Date.now() - 40 * 86_400_000, prefill }));
+    const upload = () => me("POST", `/api/notify/devices/${deviceId}/registrations`, { items });
+    expect((await upload()).statusCode).toBe(200);
+    expect((await other("POST", `/api/notify/devices/${deviceId}/registrations`, { items })).statusCode).toBe(404);
+    const pending = (await me("GET", "/api/notify/registrations")).json();
+    expect(pending).toHaveLength(3);
+    expect((await other("GET", "/api/notify/registrations")).json()).toHaveLength(0);
+    expect((await other("POST", "/api/notify/registrations/exclude", { id: pending[0].id })).statusCode).toBe(404);
+    const input = { ...prefill, installmentMonths: 1, pendingId: pending[0].id };
+    const invalid = await me("POST", "/api/transactions", { ...input, categoryId: crypto.randomUUID() });
+    expect(invalid.statusCode).toBe(400);
+    expect((await me("GET", "/api/notify/registrations")).json()).toHaveLength(3);
+    const saved = await Promise.all([me("POST", "/api/transactions", input), me("POST", "/api/transactions", input)]);
+    expect(saved.map((r) => r.statusCode)).toEqual([200, 200]);
+    expect(saved[0]!.json().id).toBe(saved[1]!.json().id);
+    expect((await me("POST", "/api/notify/registrations/exclude", { id: pending[0].id })).statusCode).toBe(409);
+    expect((await me("POST", "/api/notify/registrations/exclude", { id: pending[1].id })).statusCode).toBe(200);
+    expect((await me("POST", "/api/transactions", { ...input, pendingId: pending[1].id })).statusCode).toBe(409);
+    await upload();
+    const remaining = (await me("GET", "/api/notify/registrations")).json();
+    expect(remaining.map((r: { id: string }) => r.id)).toEqual([pending[2].id]);
+    const raw = await db.execute(sql`SELECT prefill_enc FROM notify_registrations WHERE device_id = ${deviceId}`);
+    expect(JSON.stringify(raw)).not.toContain("대기 거래처");
+  });
   it("기기 등록, 설정 사본 버전, 알림 업로드(중복 없음, 암호화), 다른 계정 차단", async () => {
     const me = await login("dad@test.com", "아빠");
     const other = await login("other@test.com", "남");

@@ -69,8 +69,8 @@ export function useSaveTransaction() {
   return useMutation({
     mutationKey: ["ledger-write"],
     networkMode: "always",
-    mutationFn: ({ id, input }: { id?: string; input: TransactionInput }) =>
-      api<Transaction>(id ? `/api/transactions/${id}` : "/api/transactions", { method: id ? "PATCH" : "POST", body: input }),
+    mutationFn: ({ id, input, pendingId }: { id?: string; input: TransactionInput; pendingId?: string }) =>
+      api<Transaction>(id ? `/api/transactions/${id}` : "/api/transactions", { method: id ? "PATCH" : "POST", body: { ...input, ...(pendingId ? { pendingId } : {}) } }),
     onMutate: async ({ id, input }) => {
       const identity = session.get();
       await qc.cancelQueries({ queryKey: ["transactions"] });

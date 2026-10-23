@@ -32,6 +32,25 @@ export const notifyDeviceConfigSchema = z.object({
 });
 export type NotifyDeviceConfig = z.infer<typeof notifyDeviceConfigSchema>;
 
+/** 알림을 받은 당시의 등록 값. 템플릿 변경과 이력 정리의 영향을 받지 않는다. */
+export const notifyPrefillSchema = z.object({
+  kind: z.enum(transactionKinds),
+  amount: z.number().int().positive().max(99_999_999_999),
+  counterparty: z.string().max(500).nullable(),
+  memo: z.string().max(4000).nullable(),
+  occurredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
+  paymentMethodId: z.string().uuid().nullable(),
+  categoryId: z.string().uuid().nullable(),
+});
+export const notifyRegistrationsSchema = z.object({
+  items: z.array(z.object({
+    eventKey: z.string().regex(/^[a-f0-9]{64}$/),
+    packageName: z.string().min(1).max(200),
+    postedAt: z.number().int().positive(),
+    prefill: notifyPrefillSchema,
+  })).max(200),
+});
+
 export const notifyAppsSchema = z.object({
   apps: z.array(z.object({ packageName: z.string().min(1).max(200), label: z.string().max(200), launchable: z.boolean() })).max(3000),
 });

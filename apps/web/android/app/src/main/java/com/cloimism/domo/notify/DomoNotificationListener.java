@@ -30,7 +30,7 @@ public class DomoNotificationListener extends NotificationListenerService {
     static final String CHANNEL_ID = "domo_register";
     static final String EXTRA_PREFILL = "domo_prefill";
 
-    /** 시스템과 연결된 상태. 상단바 상태 표시에 쓴다. */
+    /** 시스템과 연결된 상태. 설정의 감시 상태 표시에 쓴다. */
     static volatile boolean connected = false;
 
     @Override
@@ -94,7 +94,7 @@ public class DomoNotificationListener extends NotificationListenerService {
         }
         boolean changed = store.insertNotification(sbn.getPackageName(), title, body, rawText, bigText, sbn.getKey(), eventKey, eventAt, postedAt, matchedId);
         if (changed && matched != null && store.markIfNew(eventKey, postedAt)) {
-            postRegistration(matchedTemplate, matched, sbn.getPackageName());
+            postRegistration(store, eventKey, postedAt, matchedTemplate, matched, sbn.getPackageName());
             if (target.optBoolean("removeOriginal", false)) cancelNotification(sbn.getKey());
         }
         // PC에서도 볼 수 있게 바로 서버에 올린다. 실패분은 다음 알림 때 함께 보낸다.
@@ -106,7 +106,7 @@ public class DomoNotificationListener extends NotificationListenerService {
         return result.length() > 4000 ? result.substring(0, 4000) : result;
     }
 
-    private void postRegistration(JSONObject template, NotifyMatcher.Match match, String sourcePackage) {
+    private void postRegistration(NotifyStore store, String eventKey, long postedAt, JSONObject template, NotifyMatcher.Match match, String sourcePackage) {
         ensureChannel(this);
         JSONObject prefill = new JSONObject();
         try {
@@ -119,11 +119,13 @@ public class DomoNotificationListener extends NotificationListenerService {
             prefill.put("categoryId", template.isNull("categoryId") ? JSONObject.NULL : template.optString("categoryId"));
             prefill.put("templateId", template.optString("id"));
             prefill.put("sourcePackage", sourcePackage);
+            prefill.put("pendingId", store.deviceId() + ":" + eventKey);
         } catch (JSONException e) {
             return;
         }
 
-        int requestCode = (int) (System.currentTimeMillis() & 0x7fffffff);
+        if (!store.insertRegistration(eventKey, sourcePackage, postedAt, prefill)) return;
+        int requestCode = eventKey.hashCode() & 0x7fffffff;
         Intent intent = new Intent(this, MainActivity.class)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(EXTRA_PREFILL, prefill.toString());

@@ -22,8 +22,8 @@ import { and, count, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/client.ts";
-import { categories, householdMembers, paymentMethods, recurringExpenses, transactions } from "../db/schema.ts";
-import { HttpError, parse, requireMember, type MemberRow } from "../http.ts";
+import { categories, householdMembers, paymentMethods, recurringExpenses, transactions, notifyDevices, notifyRegistrations } from "../db/schema.ts";
+import { HttpError, parse, requireMember, userIdOf, type MemberRow } from "../http.ts";
 
 const rangeSchema = z.object({ start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
 const settlementMonth = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/).transform((s) => s as YearMonth);
@@ -184,8 +184,25 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
 
   app.post("/api/transactions", async (req) => {
     const me = await requireMember(db, req);
-    const input = parse(transactionInputSchema, req.body);
+    const { pendingId, ...input } = parse(transactionInputSchema.extend({ pendingId: z.string().min(1).max(101).optional() }), req.body);
     await assertRefs(me, input);
+    if (pendingId) return db.transaction(async (tx) => {
+      // 같은 알림을 PC와 휴대폰에서 동시에 처리해도 거래는 하나만 만든다.
+      const [pending] = await tx.select({ registration: notifyRegistrations }).from(notifyRegistrations)
+        .innerJoin(notifyDevices, eq(notifyDevices.id, notifyRegistrations.deviceId))
+        .where(and(eq(notifyRegistrations.id, pendingId), eq(notifyDevices.userId, userIdOf(req))))
+        .for("update", { of: notifyRegistrations });
+      if (!pending) throw new HttpError(404, "대기 건을 찾을 수 없습니다.");
+      const r = pending.registration;
+      if (r.status === "registered" && r.transactionId) {
+        const [saved] = await tx.select().from(transactions).where(and(eq(transactions.id, r.transactionId), eq(transactions.householdId, me.householdId)));
+        if (saved) return toDto(saved);
+      }
+      if (r.status !== "pending") throw new HttpError(409, "이미 처리된 알림입니다. 대기 목록을 새로 확인해 주세요.");
+      const [saved] = await tx.insert(transactions).values({ ...input, householdId: me.householdId, memberId: me.id }).returning();
+      await tx.update(notifyRegistrations).set({ status: "registered", transactionId: saved!.id }).where(eq(notifyRegistrations.id, pendingId));
+      return toDto(saved!);
+    });
     const [row] = await db.insert(transactions).values({ ...input, householdId: me.householdId, memberId: me.id }).returning();
     return toDto(row!);
   });

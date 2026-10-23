@@ -23,8 +23,15 @@ final class NotifySync {
     private NotifySync() {}
 
     static void kick(Context context) {
+        kick(context, () -> {});
+    }
+
+    static void kick(Context context, Runnable done) {
         Context app = context.getApplicationContext();
-        EXECUTOR.execute(() -> run(new NotifyStore(app)));
+        EXECUTOR.execute(() -> {
+            try { run(new NotifyStore(app)); }
+            finally { done.run(); }
+        });
     }
 
     private static void run(NotifyStore store) {
@@ -33,6 +40,21 @@ final class NotifySync {
         if (base == null || base.isEmpty() || token == null || token.isEmpty()) return;
         String devicePath = base + "/api/notify/devices/" + store.deviceId();
         try {
+            String after = "";
+            while (true) {
+                JSONArray items = store.registrations(after, BATCH);
+                if (items.length() == 0) break;
+                JSONObject response = request("POST", devicePath + "/registrations", token, new JSONObject().put("items", items).toString());
+                if (response == null) return;
+                JSONArray states = response.getJSONArray("states");
+                for (int i = 0; i < states.length(); i++) {
+                    JSONObject state = states.getJSONObject(i);
+                    String key = state.getString("eventKey");
+                    String status = state.getString("status");
+                    store.resolveRegistration(key, status);
+                }
+                after = items.getJSONObject(items.length() - 1).getString("eventKey");
+            }
             int serverVersion = -1;
             while (true) {
                 JSONArray items = store.pendingUploads(BATCH);

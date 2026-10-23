@@ -41,6 +41,7 @@ export interface CapturedNotification {
 
 /** 등록 알림을 눌렀을 때 넘어오는 값 */
 export interface NotifyPrefill {
+  pendingId?: string;
   kind: TransactionKind;
   amount: number;
   counterparty: string | null;
@@ -53,6 +54,8 @@ export interface NotifyPrefill {
 }
 
 interface DomoNotifyPlugin {
+  getRegistrations(): Promise<{ items: import("./notifyPending.ts").PendingRegistration[] }>;
+  resolveRegistration(options: { eventKey: string; status: "registered" | "excluded" }): Promise<void>;
   getStatus(): Promise<NotifyStatus>;
   openListenerSettings(): Promise<void>;
   requestPostPermission(): Promise<{ postAllowed: boolean }>;

@@ -682,6 +682,11 @@ button.rank-row:hover { background: var(--hover); }
 .readonly-note.is-bad { background: var(--danger-soft); color: var(--danger); }
 .notify-status { position: relative; }
 .notify-status .status-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border: 2px solid var(--bg); border-radius: 50%; box-sizing: content-box; }
+.pending-notifications { list-style: none; padding: 0; margin: 0; }
+.pending-notifications li + li { border-top: 1px solid var(--line); }
+.pending-notification { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 16px 8px; text-align: left; color: var(--ink); background: transparent; border: 0; cursor: pointer; overflow-wrap: anywhere; }
+.pending-notification:hover { background: var(--hover); }
+.pending-notification strong { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 
 /* AI 연결 테스트 결과 */
 .test-result { display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--radius-sm); background: color-mix(in oklab, var(--income) 12%, var(--surface)); color: var(--ink); }

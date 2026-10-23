@@ -227,7 +227,20 @@ public class DomoNotifyPlugin extends Plugin {
     /** 밀린 알림을 지금 올린다. */
     @PluginMethod
     public void syncNow(PluginCall call) {
-        NotifySync.kick(getContext());
+        NotifySync.kick(getContext(), () -> call.resolve());
+    }
+
+    @PluginMethod
+    public void getRegistrations(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("items", toJs(store.registrations("", Integer.MAX_VALUE)));
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void resolveRegistration(PluginCall call) {
+        String key = call.getString("eventKey", "");
+        store.resolveRegistration(key, call.getString("status", ""));
         call.resolve();
     }
 

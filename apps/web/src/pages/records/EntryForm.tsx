@@ -20,7 +20,7 @@ import { useDeleteTransaction, useSaveTransaction, type HouseholdData } from "..
 const LAST_METHOD_KEY = "domo.lastPaymentMethod";
 const KIND_LABEL = { expense: "지출", income: "수입" } as const;
 
-export type EntryPrefill = Pick<Transaction, "kind" | "amount" | "counterparty" | "memo" | "occurredAt" | "paymentMethodId"> & { categoryId: string | null };
+export type EntryPrefill = Omit<Pick<Transaction, "kind" | "amount" | "counterparty" | "memo" | "occurredAt" | "paymentMethodId">, "counterparty"> & { counterparty: string | null; categoryId: string | null; pendingId?: string };
 
 export interface Suggestion {
   counterparty: string;
@@ -38,7 +38,8 @@ interface Props {
   prefill?: EntryPrefill | null;
   canEdit: boolean;
   suggestions: Suggestion[];
-  onDone: (saved: Transaction | null) => void;
+  onDone: (saved: Transaction | null) => void | Promise<void>;
+  onExclude?: () => Promise<void>;
 }
 
 function readLastMethod() {
@@ -49,7 +50,7 @@ function readLastMethod() {
   }
 }
 
-export function EntryForm({ data, kind: initialKind, transaction, prefill = null, canEdit, suggestions, onDone }: Props) {
+export function EntryForm({ data, kind: initialKind, transaction, prefill = null, canEdit, suggestions, onDone, onExclude }: Props) {
   const dialog = useDialog();
   const save = useSaveTransaction();
   const remove = useDeleteTransaction();
@@ -89,6 +90,7 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
   const [categoryId, setCategoryId] = useState<string | null>(first.categoryId);
   const [occurredAt, setOccurredAt] = useState(first.occurredAt);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [excluding, setExcluding] = useState(false);
 
   // 다른 기록을 고르거나 새 기록, 알림 값으로 바뀌면 폼을 다시 채운다.
   useEffect(() => {
@@ -214,9 +216,9 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
       return;
     }
     try {
-      const saved = await save.mutateAsync({ id: transaction?.id, input: parsed.data });
+      const saved = await save.mutateAsync({ id: transaction?.id, input: parsed.data, pendingId: prefill?.pendingId });
       if (parsed.data.paymentMethodId) localStorage.setItem(LAST_METHOD_KEY, parsed.data.paymentMethodId);
-      onDone(saved);
+      await onDone(saved);
     } catch (err) {
       await dialog.alert("저장하지 못했습니다", (err as Error).message);
     }
@@ -233,7 +235,7 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
     if (!ok) return;
     try {
       await remove.mutateAsync(transaction.id);
-      onDone(null);
+      await onDone(null);
     } catch (err) {
       await dialog.alert("삭제하지 못했습니다", (err as Error).message);
     }
@@ -436,12 +438,17 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
 
       {canEdit && (
         <div className="entry-form-foot">
+          {onExclude && !transaction && <button type="button" className="btn btn-ghost" disabled={excluding || save.isPending} onClick={async () => {
+            setExcluding(true);
+            try { await onExclude(); } catch (err) { await dialog.alert("제외하지 못했습니다", (err as Error).message); }
+            finally { setExcluding(false); }
+          }}>{excluding ? "제외 중" : "제외하기"}</button>}
           {transaction && (
             <button type="button" className="btn btn-text-danger" onClick={onDelete} disabled={remove.isPending}>
               <Trash2 size={17} aria-hidden="true" /> 삭제
             </button>
           )}
-          <button type="submit" className="btn btn-primary" disabled={save.isPending}>
+          <button type="submit" className="btn btn-primary" disabled={save.isPending || excluding}>
             {save.isPending ? "저장 중" : transaction ? "수정 저장" : `${label} 기록`}
           </button>
         </div>

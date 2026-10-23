@@ -25,6 +25,7 @@ self.addEventListener('fetch', event => {
   }],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   server: {
+    host: "0.0.0.0",
     port: 5173,
     // 개발 API(4310, domo_dev DB)로 보낸다. 운영 서버(4300)로 보내지 않는다.
     proxy: { "/api": "http://127.0.0.1:4310" },

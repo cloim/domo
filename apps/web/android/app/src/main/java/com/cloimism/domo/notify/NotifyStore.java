@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import androidx.core.app.NotificationManagerCompat;
 import java.util.Iterator;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -34,9 +35,11 @@ public final class NotifyStore {
 
     private final SharedPreferences prefs;
     private final Db db;
+    private final Context context;
 
     public NotifyStore(Context context) {
         Context app = context.getApplicationContext();
+        this.context = app;
         prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         db = new Db(app);
     }
@@ -277,14 +280,51 @@ public final class NotifyStore {
         db.getWritableDatabase().delete("notifications", "pkg = ?", new String[] { packageName });
     }
 
+    /** 원문 이력 정리와 별도로, 알림 표시 전에 등록 값을 영구 보관한다. */
+    public boolean insertRegistration(String eventKey, String pkg, long postedAt, JSONObject prefill) {
+        ContentValues v = new ContentValues();
+        v.put("event_key", eventKey);
+        v.put("pkg", pkg);
+        v.put("posted_at", postedAt);
+        v.put("prefill", prefill.toString());
+        return db.getWritableDatabase().insertWithOnConflict("registrations", null, v, SQLiteDatabase.CONFLICT_IGNORE) != -1;
+    }
+
+    public JSONArray registrations(String after, int limit) {
+        JSONArray out = new JSONArray();
+        try (Cursor c = db.getReadableDatabase().query("registrations", null, "status = 'pending' AND event_key > ?", new String[] { after }, null, null, "event_key ASC", String.valueOf(limit))) {
+            while (c.moveToNext()) {
+                JSONObject o = new JSONObject();
+                String key = c.getString(c.getColumnIndexOrThrow("event_key"));
+                o.put("id", deviceId() + ":" + key);
+                o.put("deviceId", deviceId());
+                o.put("eventKey", key);
+                o.put("packageName", c.getString(c.getColumnIndexOrThrow("pkg")));
+                o.put("postedAt", c.getLong(c.getColumnIndexOrThrow("posted_at")));
+                o.put("prefill", new JSONObject(c.getString(c.getColumnIndexOrThrow("prefill"))));
+                out.put(o);
+            }
+        } catch (JSONException e) { throw new IllegalStateException(e); }
+        return out;
+    }
+
+    public void resolveRegistration(String key, String status) {
+        if (!"registered".equals(status) && !"excluded".equals(status)) return;
+        ContentValues v = new ContentValues();
+        v.put("status", status);
+        db.getWritableDatabase().update("registrations", v, "event_key = ?", new String[] { key });
+        NotificationManagerCompat.from(context).cancel(key.hashCode() & 0x7fffffff);
+    }
+
     private static final class Db extends SQLiteOpenHelper {
         Db(Context context) {
             // 2: 서버 업로드 여부(synced)
-            super(context, "domo_notify.db", null, 3);
+            super(context, "domo_notify.db", null, 4);
         }
 
         @Override
         public void onCreate(SQLiteDatabase d) {
+            createRegistrations(d);
             d.execSQL(
                 "CREATE TABLE notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, pkg TEXT NOT NULL, title TEXT, body TEXT, posted_at INTEGER NOT NULL, template_id TEXT, synced INTEGER NOT NULL DEFAULT 0, raw_text TEXT, big_text TEXT, notification_key TEXT, event_key TEXT, event_at INTEGER, revision INTEGER NOT NULL DEFAULT 0)"
             );
@@ -294,12 +334,17 @@ public final class NotifyStore {
 
         @Override
         public void onUpgrade(SQLiteDatabase d, int oldVersion, int newVersion) {
+            if (oldVersion < 4) createRegistrations(d);
             // 이전에 받은 알림도 올리도록 0(미전송)으로 둔다.
             if (oldVersion < 2) d.execSQL("ALTER TABLE notifications ADD COLUMN synced INTEGER NOT NULL DEFAULT 0");
             if (oldVersion < 3) {
                 for (String column : new String[] { "raw_text TEXT", "big_text TEXT", "notification_key TEXT", "event_key TEXT", "event_at INTEGER", "revision INTEGER NOT NULL DEFAULT 0" }) d.execSQL("ALTER TABLE notifications ADD COLUMN " + column);
                 d.execSQL("CREATE UNIQUE INDEX notifications_event_uq ON notifications (event_key)");
             }
+        }
+
+        private void createRegistrations(SQLiteDatabase d) {
+            d.execSQL("CREATE TABLE registrations (event_key TEXT PRIMARY KEY, pkg TEXT NOT NULL, posted_at INTEGER NOT NULL, prefill TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending')");
         }
     }
 }

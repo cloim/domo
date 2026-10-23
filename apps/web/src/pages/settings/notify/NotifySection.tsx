@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { BellRing, ChevronLeft, Plus, Search, ShieldAlert, Smartphone, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { App as CapApp } from "@capacitor/app";
 import { useSearchParams } from "react-router";
 import { useDialog } from "../../../components/Dialogs.tsx";
 import { Modal } from "../../../components/Modal/index.js";
@@ -163,14 +164,19 @@ export function NoDevice() {
 function PermissionCard() {
   const qc = useQueryClient();
   const status = useNotifyStatus();
+  useEffect(() => {
+    const handle = CapApp.addListener("resume", () => void qc.invalidateQueries({ queryKey: notifyKeys.status }));
+    return () => void handle.then((h) => h.remove());
+  }, [qc]);
   const refresh = () => qc.invalidateQueries({ queryKey: notifyKeys.status });
   if (!status.data) return <span className="skeleton" style={{ display: "block", height: 64 }} />;
   const s = status.data;
+  const health = notifyHealth(s);
   if (s.listenerEnabled && s.postAllowed) {
     return (
       <div className="kv">
         <span className="hint">알림 감시</span>
-        <strong style={{ color: s.connected ? "var(--income)" : "var(--accent)" }}>{s.connected ? "동작 중" : "연결 대기"}</strong>
+        <strong style={{ color: health === "running" ? "var(--income)" : "var(--accent)" }}>{health === "idle" ? "대상 앱이나 템플릿 확인 필요" : s.connected ? "동작 중" : "연결 대기"}</strong>
       </div>
     );
   }

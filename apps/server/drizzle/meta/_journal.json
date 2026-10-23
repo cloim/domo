@@ -64,6 +64,13 @@
       "when": 1792533000000,
       "tag": "0008_household_improvements",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792718725046,
+      "tag": "0009_stiff_karma",
+      "breakpoints": true
     }
   ]
 }
