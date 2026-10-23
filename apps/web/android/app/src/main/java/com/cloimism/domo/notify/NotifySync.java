@@ -22,6 +22,29 @@ final class NotifySync {
 
     private NotifySync() {}
 
+    /** 서버에 저장된 승인월 사용액에 이번 승인금액을 더해 목표 안내를 받는다. */
+    static void checkMonthlyTarget(Context context, JSONObject prefill, java.util.function.Consumer<String> done) {
+        Context app = context.getApplicationContext();
+        EXECUTOR.execute(() -> {
+            String message = null;
+            try {
+                NotifyStore store = new NotifyStore(app);
+                String methodId = prefill.optString("paymentMethodId", "");
+                if ("expense".equals(prefill.optString("kind")) && !methodId.isEmpty() && !"null".equals(methodId) && !store.apiBase().isEmpty() && !store.token().isEmpty()) {
+                    JSONObject body = new JSONObject();
+                    body.put("amount", prefill.getLong("amount"));
+                    body.put("occurredAt", prefill.getString("occurredAt"));
+                    body.put("counterparty", prefill.opt("counterparty"));
+                    JSONObject response = request("POST", store.apiBase() + "/api/payment-methods/" + methodId + "/target-status", store.token(), body.toString());
+                    if (response != null && !response.isNull("message")) message = response.optString("message", null);
+                }
+            } catch (Exception ignored) {
+                // 연결 실패 시 이미 표시한 기본 등록 알림을 유지한다.
+            }
+            done.accept(message);
+        });
+    }
+
     static void kick(Context context) {
         kick(context, () -> {});
     }

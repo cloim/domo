@@ -59,6 +59,8 @@ export const paymentMethodInputSchema = z
     paymentDay: dayOfMonth.nullable(),
     holderMemberId: z.string().uuid().nullable(),
     holderName: z.string().trim().max(30).nullable(),
+    monthlyTargetAmount: z.number().int().positive("월 목표 금액은 0보다 커야 합니다.").max(10_000_000_000).nullable().optional(),
+    targetExcludedCounterparties: z.array(z.string().trim().min(1).max(60)).max(100).optional(),
   })
   .superRefine((v, ctx) => {
     if (v.type === "cash") {

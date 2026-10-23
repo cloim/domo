@@ -43,6 +43,8 @@ export interface PaymentMethod {
   paymentDay: number | null;
   holderMemberId: string | null;
   holderName: string | null;
+  monthlyTargetAmount?: number | null;
+  targetExcludedCounterparties?: string[];
 }
 
 /** 신용카드만 할부를 받는다. */

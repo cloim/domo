@@ -71,6 +71,13 @@
       "when": 1792718725046,
       "tag": "0009_stiff_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792769911581,
+      "tag": "0010_chunky_eternity",
+      "breakpoints": true
     }
   ]
 }

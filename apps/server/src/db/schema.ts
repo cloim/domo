@@ -121,6 +121,8 @@ export const paymentMethods = pgTable("payment_methods", {
   paymentDay: integer("payment_day"),
   holderMemberId: uuid("holder_member_id").references(() => householdMembers.id, { onDelete: "set null" }),
   holderName: text("holder_name"),
+  monthlyTargetAmount: bigint("monthly_target_amount", { mode: "number" }),
+  targetExcludedCounterparties: jsonb("target_excluded_counterparties").$type<string[]>().notNull().default([]),
   createdAt: createdAt(),
 });
 

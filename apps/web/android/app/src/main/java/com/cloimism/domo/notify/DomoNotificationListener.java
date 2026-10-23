@@ -134,7 +134,7 @@ public class DomoNotificationListener extends NotificationListenerService {
         String kindLabel = "income".equals(match.kind) ? "수입" : "지출";
         String amount = NumberFormat.getNumberInstance(Locale.KOREA).format(match.amount) + "원";
         String detail = kindLabel + " " + amount + (match.counterparty == null ? "" : " · " + match.counterparty);
-        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_domo)
             .setContentTitle("도모에 기록할까요?")
             .setContentText(detail)
@@ -142,10 +142,24 @@ public class DomoNotificationListener extends NotificationListenerService {
             .setContentIntent(pending)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .build();
+            .setCategory(NotificationCompat.CATEGORY_REMINDER);
         try {
-            NotificationManagerCompat.from(this).notify(requestCode, notification);
+            NotificationManagerCompat.from(this).notify(requestCode, builder.build());
+            NotifySync.checkMonthlyTarget(this, prefill, message -> {
+                if (message == null || message.isEmpty()) return;
+                NotificationManager manager = getSystemService(NotificationManager.class);
+                // 확인 또는 닫기 처리한 알림을 조회 응답으로 다시 띄우지 않는다.
+                for (StatusBarNotification active : manager.getActiveNotifications()) {
+                    if (active.getId() != requestCode) continue;
+                    try {
+                        builder.setContentText(detail + " | " + message)
+                            .setStyle(new NotificationCompat.BigTextStyle().bigText(detail + "\n" + message + "\n눌러서 확인하고 저장하세요."))
+                            .setOnlyAlertOnce(true);
+                        NotificationManagerCompat.from(this).notify(requestCode, builder.build());
+                    } catch (SecurityException ignored) {}
+                    break;
+                }
+            });
         } catch (SecurityException e) {
             // 알림 표시 권한이 없으면 띄우지 못한다. 상태 화면에서 권한을 안내한다.
         }

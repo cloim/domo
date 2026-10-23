@@ -147,6 +147,39 @@ describe("카드 지출수단", () => {
   });
 });
 
+describe("카드 월 목표", () => {
+  it("승인월 전액, 제외 지출처, 목표 경계와 가계 권한을 적용한다", async () => {
+    const owner = await login("target@test.com", "목표 사용자");
+    const other = await login("target-other@test.com", "다른 가계");
+    await owner("POST", "/api/households", { name: "목표 검증 가계" });
+    await other("POST", "/api/households", { name: "다른 목표 가계" });
+    const base = (await owner("GET", "/api/household")).json();
+    const category = base.categories.find((c: { parentId: string | null; kind: string }) => c.parentId && c.kind === "expense");
+    const method = (await owner("POST", "/api/payment-methods", cardInput({ monthlyTargetAmount: 100000, targetExcludedCounterparties: ["보험사"] }))).json();
+    const saved = (await owner("GET", "/api/household")).json().paymentMethods.find((m: { id: string }) => m.id === method.id);
+    expect(saved).toMatchObject({ monthlyTargetAmount: 100000, targetExcludedCounterparties: ["보험사"] });
+    const tx = { kind: "expense", paymentMethodId: method.id, counterparty: "마트", memo: null, amount: 90000, installmentMonths: 3, categoryId: category.id, occurredAt: "2026-01-31T23:59" };
+    expect((await owner("POST", "/api/transactions", tx)).statusCode).toBe(200);
+    await owner("POST", "/api/transactions", { ...tx, counterparty: "보험사", amount: 200000, installmentMonths: 1 });
+    const check = (amount: number, occurredAt = "2026-01-31T23:59", counterparty = "편의점") => owner("POST", `/api/payment-methods/${method.id}/target-status`, { amount, occurredAt, counterparty });
+    expect((await check(9999)).json()).toMatchObject({ spent: 99999, message: null });
+    expect((await check(10000)).json()).toMatchObject({ target: 100000, spent: 100000, message: expect.stringContaining("목표 금액을 초과") });
+    expect((await check(10001)).json().spent).toBe(100001);
+    expect((await check(10000, "2026-02-01T00:00")).json()).toMatchObject({ spent: 10000, message: null });
+    expect((await check(200000, undefined, "보험사")).json()).toEqual({ message: null });
+    expect((await check(10000, undefined, "보험사 지점")).json().message).toContain("목표 금액을 초과");
+    expect((await other("POST", `/api/payment-methods/${method.id}/target-status`, { amount: 10000, occurredAt: tx.occurredAt, counterparty: "마트" })).statusCode).toBe(404);
+    for (const monthlyTargetAmount of [0, -1, 1.5, 10000000001]) {
+      expect((await owner("PUT", `/api/payment-methods/${method.id}`, cardInput({ monthlyTargetAmount }))).statusCode).toBe(400);
+    }
+    // 구버전 클라이언트가 새 설정을 생략해도 기존 값을 보존한다.
+    await owner("PUT", `/api/payment-methods/${method.id}`, cardInput());
+    expect((await check(10000)).json().message).toContain("목표 금액을 초과");
+    await owner("PUT", `/api/payment-methods/${method.id}`, cardInput({ monthlyTargetAmount: null, targetExcludedCounterparties: [] }));
+    expect((await check(200000)).json()).toEqual({ message: null });
+  });
+});
+
 describe("고정지출", () => {
   it("결제일에 기록을 만들고 중복과 지운 달 재생성을 막는다", async () => {
     const mom = await login("mom@test.com", "엄마");

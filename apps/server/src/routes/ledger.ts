@@ -18,7 +18,7 @@ import {
   type PaymentMethodInput,
   type TransactionInput,
 } from "@domo/core";
-import { and, count, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/client.ts";
@@ -246,8 +246,34 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
       paymentDay: card ? input.paymentDay : null,
       holderMemberId: card ? input.holderMemberId : null,
       holderName: card ? input.holderName || null : null,
+      monthlyTargetAmount: card ? input.monthlyTargetAmount : null,
+      targetExcludedCounterparties: card ? input.targetExcludedCounterparties : [],
     };
   }
+
+  // 승인월의 승인금액 전액을 집계한다. 할부 회차와 카드 청구 기간은 사용하지 않는다.
+  app.post<{ Params: { id: string } }>("/api/payment-methods/:id/target-status", async (req) => {
+    const me = await requireMember(db, req);
+    const input = parse(z.object({
+      amount: z.number().int().positive().max(10_000_000_000),
+      occurredAt: z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])-\d{2}T\d{2}:\d{2}$/),
+      counterparty: z.string().trim().max(60).nullable(),
+    }), req.body);
+    const [method] = await db.select().from(paymentMethods).where(and(eq(paymentMethods.id, req.params.id), eq(paymentMethods.householdId, me.householdId)));
+    if (!method) throw new HttpError(404, "지출수단을 찾을 수 없습니다.");
+    const target = method.monthlyTargetAmount;
+    const excluded = method.targetExcludedCounterparties;
+    if (method.type !== "card" || target === null || (input.counterparty !== null && excluded.includes(input.counterparty))) return { message: null };
+    const month = input.occurredAt.slice(0, 7) as YearMonth;
+    const range = monthRange(month);
+    const [row] = await db.select({ spent: sql<number>`COALESCE(SUM(${transactions.amount}), 0)::float8` }).from(transactions).where(and(
+      eq(transactions.householdId, me.householdId), eq(transactions.paymentMethodId, method.id), eq(transactions.kind, "expense"),
+      isNull(transactions.settlementMethodId), gte(transactions.occurredAt, `${range.start}T00:00`), lte(transactions.occurredAt, `${range.end}T23:59:59.999999`),
+      excluded.length ? notInArray(transactions.counterparty, excluded) : undefined,
+    ));
+    const spent = Number(row!.spent) + input.amount;
+    return { target, spent, message: spent >= target ? `월 목표 금액을 초과했어요. ${method.name} ${month} 사용액 ${spent.toLocaleString("ko-KR")}원 / 목표 ${target.toLocaleString("ko-KR")}원 (이번 지출 포함)` : null };
+  });
 
   async function activeMethodCount(householdId: string) {
     const [row] = await db.select({ n: count() }).from(paymentMethods).where(and(eq(paymentMethods.householdId, householdId), isNull(paymentMethods.archivedAt)));

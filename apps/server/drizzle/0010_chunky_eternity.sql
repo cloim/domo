@@ -1,0 +1,2 @@
+ALTER TABLE "payment_methods" ADD COLUMN "monthly_target_amount" BIGINT;--> statement-breakpoint
+ALTER TABLE "payment_methods" ADD COLUMN "target_excluded_counterparties" JSONB DEFAULT '[]'::JSONB NOT NULL;
