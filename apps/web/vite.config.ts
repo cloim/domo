@@ -25,9 +25,9 @@ self.addEventListener('fetch', event => {
   }],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   server: {
-    host: "0.0.0.0",
-    port: 5173,
-    // 개발 API(4310, domo_dev DB)로 보낸다. 운영 서버(4300)로 보내지 않는다.
-    proxy: { "/api": "http://127.0.0.1:4310" },
+    host: process.env.DOMO_AGENT_TEST_DB === "true" ? "127.0.0.1" : "0.0.0.0",
+    port: process.env.DOMO_AGENT_TEST_DB === "true" ? 5174 : 5173,
+    // 일반 개발은 실제 데이터 API, 에이전트 세션은 테스트 DB API를 사용한다.
+    proxy: { "/api": process.env.DOMO_AGENT_TEST_DB === "true" ? "http://127.0.0.1:4320" : "http://127.0.0.1:4310" },
   },
 });

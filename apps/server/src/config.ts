@@ -24,16 +24,24 @@ function required(name: string): string {
 }
 
 export function loadConfig(): Config {
+  const agentTestDb = process.env.DOMO_AGENT_TEST_DB === "true";
+  const databaseUrl = new URL(required("DATABASE_URL"));
+  if (agentTestDb) {
+    if (!(["localhost", "127.0.0.1"].includes(databaseUrl.hostname) && databaseUrl.port === "5434")) {
+      throw new Error("에이전트 실행은 localhost:5434의 테스트 DB만 사용할 수 있습니다.");
+    }
+    databaseUrl.pathname = "/domo_test";
+  }
   return {
-    port: Number(process.env.PORT ?? 4300),
-    databaseUrl: required("DATABASE_URL"),
+    port: agentTestDb ? 4320 : Number(process.env.PORT ?? 4300),
+    databaseUrl: databaseUrl.toString(),
     jwtSecret: required("JWT_SECRET"),
     googleClientId: process.env.GOOGLE_CLIENT_ID || null,
-    devLogin: process.env.DEV_LOGIN === "true",
-    publicUrl: process.env.PUBLIC_URL ?? "http://localhost:4300",
-    webDist: process.env.WEB_DIST ? resolve(process.env.WEB_DIST) : null,
+    devLogin: agentTestDb || process.env.DEV_LOGIN === "true",
+    publicUrl: agentTestDb ? "http://localhost:4320" : process.env.PUBLIC_URL ?? "http://localhost:4300",
+    webDist: agentTestDb ? null : process.env.WEB_DIST ? resolve(process.env.WEB_DIST) : null,
     aiSecretKey: process.env.AI_SECRET_KEY || null,
-    host: process.env.HOST || "127.0.0.1",
+    host: agentTestDb ? "127.0.0.1" : process.env.HOST || "127.0.0.1",
     aiAllowPrivateHosts: process.env.AI_ALLOW_PRIVATE_HOSTS === "true",
   };
 }

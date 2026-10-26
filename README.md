@@ -12,19 +12,22 @@
 
 ## 개발
 
-운영과 개발은 포트, DB, 설정 파일을 따로 쓴다.
+운영과 개발은 포트와 설정 파일을 따로 씁니다. 일반 개발 화면은 실제 가계 데이터가 있는 `domo` DB를 사용합니다. 에이전트 작업은 별도 포트와 테스트 DB를 사용합니다.
 
 | 구분 | 화면 | API | DB | 설정 |
 | --- | --- | --- | --- | --- |
 | 운영 | 4300 (서버가 웹 빌드도 제공) | 4300 | `domo` | `.env` |
-| 개발 | 5173 (Vite) | 4310 | `domo_dev` | `.env.development` |
+| 개발 | 5173 (Vite) | 4310 | `domo` | `.env.development` |
+| 에이전트 개발 | 5174 (Vite) | 4320 | `domo_test` | `.env.development`에서 안전하게 강제 |
 
 ```bash
 pnpm install
-cp .env.example .env.development   # 개발 값 채우기(PORT=4310, domo_dev, DEV_LOGIN=true)
+cp .env.example .env.development   # 개발 값 채우기(PORT=4310, PUBLIC_URL=http://localhost:4310, DEV_LOGIN=true)
 pnpm db:up                         # PostgreSQL (localhost:5434)
-pnpm dev:server                    # 개발 API http://localhost:4310
+pnpm dev:server                    # 실제 데이터 개발 API http://localhost:4310
 pnpm dev:web                       # 개발 화면 http://localhost:5173 (/api 는 4310으로)
+pnpm dev:server:agent              # 에이전트 전용 API, localhost:4320, domo_test
+pnpm dev:web:agent                 # 에이전트 전용 화면 http://localhost:5174 (/api 는 4320으로)
 pnpm test                          # 테스트는 domo_test DB
 pnpm build:check                   # 검증 빌드는 release/web-check, 운영 웹 출력과 분리
 ```
@@ -35,7 +38,7 @@ pnpm build:check                   # 검증 빌드는 release/web-check, 운영 
   - `Server`: 포트 `4300` (`pnpm start`, 웹 빌드 서빙 및 API 제공, `https://domo.cloimism.com` 연결)
   - DB는 독립 Docker 컨테이너(`domo-db`, 포트 5434)로 상시 구동
 - **개발 패드 (Domo Dev)**: `개발` 패드셋 (슬롯 9)
-  - `Server`: 개발 API 포트 `4310` (`pnpm dev`, `domo_dev` DB 연결)
+  - `Server`: 개발 API 포트 `4310` (`pnpm dev`, `domo` DB 연결)
   - `Web`: 개발 화면 포트 `5173` (`pnpm dev`, Vite HMR 지원 및 `http://localhost:5173`)
 
 ## 가족 가계부 개선

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=../../.env.development src/index.ts",
+    "dev:agent": "node scripts/dev-agent.mjs",
     "start": "tsx --env-file=../../.env src/index.ts",
     "db:generate": "drizzle-kit generate",
     "test": "vitest run",
