@@ -1,5 +1,45 @@
 import { GripVertical } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+/** dnd-kit 기반 정렬 목록. 키보드와 포인터 입력을 지원한다. */
+export function DndSortableList<T extends { id: string; name: string }>({ items, onReorder, disabled = false, className = "", renderItem }: {
+  items: T[];
+  onReorder: (ids: string[]) => void;
+  disabled?: boolean;
+  className?: string;
+  renderItem: (item: T) => ReactNode;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  function finish(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!disabled && over && active.id !== over.id) {
+      onReorder(arrayMove(items, items.findIndex((item) => item.id === active.id), items.findIndex((item) => item.id === over.id)).map((item) => item.id));
+    }
+  }
+  return <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={finish}>
+    <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+      <div className={`sortable-list ${className}`} role="list" aria-label="끌어서 순서 변경">
+        {items.map((item) => <DndSortableRow key={item.id} item={item} disabled={disabled} renderItem={renderItem} />)}
+      </div>
+    </SortableContext>
+  </DndContext>;
+}
+
+function DndSortableRow<T extends { id: string; name: string }>({ item, disabled, renderItem }: { item: T; disabled: boolean; renderItem: (item: T) => ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled });
+  return <div ref={setNodeRef} role="listitem" className={`sortable-row${isDragging ? " is-dragging" : ""}`} style={{ transform: CSS.Transform.toString(transform), transition }}>
+    <button type="button" className="icon-btn sort-handle" aria-label={`${item.name} 순서 변경`} title="끌어서 순서 변경" disabled={disabled} {...attributes} {...listeners}>
+      <GripVertical size={18} aria-hidden="true" />
+    </button>
+    {renderItem(item)}
+  </div>;
+}
 
 /** 포인터 손잡이로 모바일과 데스크톱을 함께 지원하고 방향키로도 순서를 저장한다. */
 export function SortableList<T extends { id: string; name: string }>({ items, onReorder, disabled = false, className = "", renderItem }: {

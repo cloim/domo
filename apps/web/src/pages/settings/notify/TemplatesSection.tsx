@@ -202,9 +202,11 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
           <ChevronLeft size={20} aria-hidden="true" />
         </button>
         <h2>{template ? template.name : "새 템플릿"}</h2>
+        {template && <button type="button" className="btn btn-danger-soft btn-sm" onClick={() => void onDelete()}><Trash2 size={16} aria-hidden="true" /> 삭제</button>}
+        <button type="submit" className="btn btn-primary btn-sm" disabled={save.isPending}>{save.isPending ? "저장 중" : template ? "저장" : "추가"}</button>
       </div>
-      <div className="md-detail-body">
-        <div className="form-row">
+      <div className="md-detail-body md-detail-body-fill">
+        <div className="template-settings-row">
           <div className="field">
             <label className="field-label" htmlFor="nt-app">
               대상 앱
@@ -219,12 +221,22 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
           </div>
           <div className="field">
             <span className="field-label">종류</span>
-            <div className="segmented" role="group" aria-label="종류" style={{ alignSelf: "flex-start" }}>
+            <div className="segmented template-kind-tabs" role="group" aria-label="종류">
               {(["expense", "income"] as const).map((k) => (
                 <button key={k} type="button" aria-pressed={draft.kind === k} onClick={() => (set("kind", k), set("categoryId", null), setParentId(""))}>
                   {KIND_LABEL[k]}
                 </button>
               ))}
+            </div>
+          </div>
+          <div className="field">
+            <span className="field-label">사용 여부</span>
+            <div className="template-enabled-control">
+              <label className="switch">
+                <span>{draft.enabled ? "사용 중" : "멈춤"}</span>
+                <input type="checkbox" checked={draft.enabled} onChange={(e) => set("enabled", e.target.checked)} />
+                <span className="switch-track" aria-hidden="true" />
+              </label>
             </div>
           </div>
         </div>
@@ -333,24 +345,6 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
         </div>
         <span className="hint">분류를 비우면 같은 거래처의 예전 기록으로 추천해요.</span>
 
-        <div className="field-label">
-          <span>사용 여부</span>
-          <label className="switch">
-            <span>{draft.enabled ? "사용 중" : "멈춤"}</span>
-            <input type="checkbox" checked={draft.enabled} onChange={(e) => set("enabled", e.target.checked)} />
-            <span className="switch-track" aria-hidden="true" />
-          </label>
-        </div>
-      </div>
-      <div className="md-detail-foot">
-        {template && (
-          <button type="button" className="btn btn-text-danger" onClick={() => void onDelete()}>
-            <Trash2 size={17} aria-hidden="true" /> 삭제
-          </button>
-        )}
-        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
-          {template ? "저장" : "추가"}
-        </button>
       </div>
     </form>
   );

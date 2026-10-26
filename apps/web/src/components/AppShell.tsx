@@ -10,6 +10,7 @@ import { useFamily } from "../lib/family.ts";
 import { useQueryClient } from "@tanstack/react-query";
 import { WidgetSync } from "./WidgetSync.tsx";
 import { widgetSupported } from "../lib/widget.ts";
+import { currentYearMonth } from "@domo/core";
 
 const NAV = [
   { to: "/records", label: "입출기록", icon: NotebookPen },
@@ -22,7 +23,7 @@ const NAV = [
 export function AppShell({ me }: { me: Me }) {
   const [offline, setOffline] = useState(!navigator.onLine);
   const qc = useQueryClient();
-  const feed = useFamily();
+  const feed = useFamily(currentYearMonth());
   useEffect(() => {
     const status = () => setOffline(!navigator.onLine);
     window.addEventListener("online", status); window.addEventListener("offline", status);

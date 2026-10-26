@@ -258,9 +258,11 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
           <ChevronLeft size={20} aria-hidden="true" />
         </button>
         <h2>{item ? fixedTitle(item) : "새 고정지출"}</h2>
+        {item && <button type="button" className="btn btn-danger-soft btn-sm" onClick={() => void onDelete()} disabled={remove.isPending}><Trash2 size={16} aria-hidden="true" /> 삭제</button>}
+        <button type="submit" className="btn btn-primary btn-sm" disabled={save.isPending}>{save.isPending ? "저장 중" : item ? "저장" : "추가"}</button>
       </div>
 
-      <div className="md-detail-body">
+      <div className="md-detail-body md-detail-body-fill">
         {item && (
           <p className="hint" style={{ margin: 0 }}>
             {next ? `다음 기록은 ${formatShortDate(next)}에 만들어져요.` : item.active ? "종료월이 지나 더 만들지 않아요." : "멈춘 상태라 기록을 만들지 않아요."}
@@ -423,16 +425,6 @@ function FixedEditor({ data, item, onBack, onSaved }: { data: HouseholdData; ite
         {!item && <span className="hint">이번 달 결제일이 이미 지났다면 다음 달부터 만들어요.</span>}
       </div>
 
-      <div className="md-detail-foot">
-        {item && (
-          <button type="button" className="btn btn-text-danger" onClick={() => void onDelete()} disabled={remove.isPending}>
-            <Trash2 size={17} aria-hidden="true" /> 삭제
-          </button>
-        )}
-        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
-          {save.isPending ? "저장 중" : item ? "저장" : "추가"}
-        </button>
-      </div>
     </form>
   );
 }

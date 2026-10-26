@@ -11,4 +11,4 @@ export interface FamilyData {
   reactions: { transactionId: string; memberId: string; reaction: "like" | "thanks" }[];
   alerts: { id: string; month: string; categoryId: string; amount: number; spent: number; createdAt: string }[];
 }
-export const useFamily = () => useQuery({ queryKey: ["family"], queryFn: () => api<FamilyData>("/api/family"), refetchInterval: 30_000 });
+export const useFamily = (month: YearMonth) => useQuery({ queryKey: ["family", month], queryFn: () => api<FamilyData>(`/api/family?month=${month}`), refetchInterval: 30_000 });

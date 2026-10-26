@@ -12,6 +12,7 @@ import { Lock, Repeat, Trash2 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
+import { Sheet } from "../../components/Sheet.tsx";
 import { formatWon } from "../../lib/format.ts";
 import { useNumericInputMode } from "../../lib/useMedia.ts";
 import { api } from "../../lib/api.ts";
@@ -30,7 +31,7 @@ export interface Suggestion {
   paymentMethodId: string | null;
 }
 
-interface Props {
+export interface EntryFormProps {
   data: HouseholdData;
   kind: TransactionKind;
   transaction: Transaction | null;
@@ -50,7 +51,7 @@ function readLastMethod() {
   }
 }
 
-export function EntryForm({ data, kind: initialKind, transaction, prefill = null, canEdit, suggestions, onDone, onExclude }: Props) {
+export function EntryForm({ data, kind: initialKind, transaction, prefill = null, canEdit, suggestions, onDone, onExclude }: EntryFormProps) {
   const dialog = useDialog();
   const save = useSaveTransaction();
   const remove = useDeleteTransaction();
@@ -444,7 +445,7 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
             finally { setExcluding(false); }
           }}>{excluding ? "제외 중" : "제외하기"}</button>}
           {transaction && (
-            <button type="button" className="btn btn-text-danger" onClick={onDelete} disabled={remove.isPending}>
+            <button type="button" className="btn btn-danger-soft" onClick={onDelete} disabled={remove.isPending}>
               <Trash2 size={17} aria-hidden="true" /> 삭제
             </button>
           )}
@@ -455,4 +456,9 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
       )}
     </form>
   );
+}
+
+/** 입출기록과 검색에서 같은 거래 상세/편집 폼을 시트로 연다. */
+export function EntrySheet({ open, title, onClose, ...formProps }: EntryFormProps & { open: boolean; title: string; onClose: () => void }) {
+  return <Sheet open={open} title={title} onClose={onClose}><EntryForm {...formProps} /></Sheet>;
 }

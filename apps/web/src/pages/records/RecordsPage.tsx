@@ -11,16 +11,15 @@ import {
   type TransactionKind,
   type YearMonth,
 } from "@domo/core";
-import { CreditCard, NotebookPen, Plus, Search, X } from "lucide-react";
+import { Banknote, CreditCard, NotebookPen, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useOutletContext, useSearchParams } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
 import { MonthSwitch } from "../../components/MonthSwitch.tsx";
-import { Sheet } from "../../components/Sheet.tsx";
 import { formatTime, formatWon, isWeekend, weekdayOf } from "../../lib/format.ts";
 import { useHousehold, useTransactions, useSuggestions, type HouseholdData, type Me } from "../../lib/queries.ts";
 import { useMedia, WIDE_EDITOR } from "../../lib/useMedia.ts";
-import { EntryForm, type EntryPrefill, type Suggestion } from "./EntryForm.tsx";
+import { EntryForm, EntrySheet, type EntryPrefill, type Suggestion } from "./EntryForm.tsx";
 import { CardSettlementDialog } from "./CardSettlementDialog.tsx";
 import { RecordBudgets } from "../../components/RecordBudgets.tsx";
 import { useQueryClient } from "@tanstack/react-query";
@@ -273,9 +272,7 @@ export function RecordsPage() {
       <button type="button" className="fab" aria-label="기록 추가" onClick={() => openEntry(null)}>
         <Plus size={28} aria-hidden="true" />
       </button>
-      <Sheet open={!wide && sheetOpen} title={formTitle} onClose={() => setSheetOpen(false)}>
-        {form}
-      </Sheet>
+      {data && <EntrySheet open={!wide && sheetOpen} title={formTitle} onClose={() => setSheetOpen(false)} data={data} kind={kind} transaction={selected} prefill={selected ? null : prefill} canEdit={canEdit(selected)} suggestions={suggestions} onDone={onDone} onExclude={pendingItem && !selected ? excludePending : undefined} />}
       {settlementOpen && <CardSettlementDialog key={month} month={month} onClose={() => setSettlementOpen(false)} />}
     </>
   );
@@ -286,9 +283,12 @@ function EntryRow({ entry, data, current, flash, onOpen }: { entry: LedgerEntry;
   const category = data.categories.find((c) => c.id === t.categoryId);
   const member = data.members.find((m) => m.id === t.memberId);
   const method = data.paymentMethods.find((m) => m.id === t.paymentMethodId);
+  const cashLike = t.kind === "income" || method?.type === "cash";
   return (
     <button type="button" className={`entry${flash ? " entry-flash" : ""}`} aria-current={current} onClick={onOpen}>
-      {member && <span className="dot" style={{ background: member.color }} title={member.displayName} aria-label={member.displayName} />}
+      <span className={`entry-method-icon${cashLike && t.kind === "expense" ? " is-cash" : ""}`} title={`${member?.displayName ? `${member.displayName}, ` : ""}${t.kind === "income" ? "수입" : cashLike ? "현금" : "카드"}`} aria-label={t.kind === "income" ? "수입" : cashLike ? "현금" : "카드"}>
+        {cashLike ? <Banknote size={18} aria-hidden="true" /> : <CreditCard size={18} aria-hidden="true" />}
+      </span>
       <span className="entry-main">
         <span className="entry-title">
           {t.counterparty}

@@ -3,7 +3,7 @@ import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2, X } fro
 import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { useDialog } from "../../components/Dialogs.tsx";
-import { SortableList } from "../../components/SortableList.tsx";
+import { DndSortableList } from "../../components/SortableList.tsx";
 import { api } from "../../lib/api.ts";
 import { useHousehold, useHouseholdMutation } from "../../lib/queries.ts";
 import { MD_TWO_PANE, useMedia } from "../../lib/useMedia.ts";
@@ -102,7 +102,7 @@ export function CategoriesSection() {
           </div>
         </div>
         <div className="md-list-body">
-          <SortableList items={visibleParents} disabled={!!q || reorder.isPending || !!editing}
+          <DndSortableList items={visibleParents} disabled={!!q || reorder.isPending || !!editing}
             onReorder={(ids) => reorder.mutate(ids, { onError: fail("순서를 바꾸지 못했습니다") })}
             renderItem={(p) => (
             <button key={p.id} type="button" className="md-item" aria-current={p.id === selectedId} onClick={() => update({ parent: p.id })}>
@@ -152,7 +152,7 @@ export function CategoriesSection() {
                 </>
               )}
             </div>
-            <div className="md-detail-body">
+            <div className="md-detail-body md-detail-body-fill">
               <form
                 className="inline-form"
                 onSubmit={(e) => {
@@ -168,7 +168,7 @@ export function CategoriesSection() {
               {visibleChildren.length === 0 ? (
                 <p className="hint">{q ? "검색어와 맞는 소분류가 없어요." : "소분류가 없어요. 기록에는 소분류를 골라야 하니 하나 이상 추가해 주세요."}</p>
               ) : (
-                <SortableList items={visibleChildren} className="list" disabled={!!q || reorder.isPending || !!editing}
+                <DndSortableList items={visibleChildren} className="list category-child-list" disabled={!!q || reorder.isPending || !!editing}
                   onReorder={(ids) => reorder.mutate(ids, { onError: fail("순서를 바꾸지 못했습니다") })}
                   renderItem={(c) => {
                     return (

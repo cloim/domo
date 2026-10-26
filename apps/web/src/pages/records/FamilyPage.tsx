@@ -1,9 +1,10 @@
-import type { Transaction } from "@domo/core";
+import { currentYearMonth, type Transaction, type YearMonth } from "@domo/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Heart, MessageCircle, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link, useOutletContext } from "react-router";
 import { TopBar } from "../../components/AppShell.tsx";
+import { MonthSwitch } from "../../components/MonthSwitch.tsx";
 import { useDialog } from "../../components/Dialogs.tsx";
 import { api } from "../../lib/api.ts";
 import { useFamily, type FamilyData } from "../../lib/family.ts";
@@ -13,8 +14,10 @@ import { useHousehold, type HouseholdData, type Me } from "../../lib/queries.ts"
 export function FamilyPage() {
   const me = useOutletContext<Me>();
   const household = useHousehold();
-  const feed = useFamily();
+  const [month, setMonth] = useState<YearMonth>(currentYearMonth());
+  const feed = useFamily(month);
   return <><TopBar title="가족 소식" me={me} /><div className="content"><div className="page family-page">
+    <div className="family-month"><MonthSwitch value={month} onChange={setMonth} /></div>
     {feed.isPending || household.isPending ? <div className="skeleton" style={{ height: 240 }} /> : !feed.data || !household.data ? <div className="empty" role="alert"><strong>소식을 불러오지 못했어요</strong><button className="btn" onClick={() => { void feed.refetch(); void household.refetch(); }}>다시 시도</button></div> : <>
       {feed.data.alerts.length > 0 && <section className="budget-notices" aria-label="예산 알림">{feed.data.alerts.map((a) => <Link to={`/plan?m=${a.month}`} key={a.id}><strong>{a.month} {household.data.categories.find((c) => c.id === a.categoryId)?.name} 예산 80% 도달</strong><span>당시 {formatWon(a.amount)}원 중 {formatWon(a.spent)}원 사용</span></Link>)}</section>}
       {!feed.data.records.length && <div className="empty"><MessageCircle aria-hidden="true" /><strong>첫 기록으로 가족에게 소식을 전해 보세요</strong><Link className="btn btn-accent" to="/records?new=1">기록 추가</Link></div>}

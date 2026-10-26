@@ -1,5 +1,5 @@
 import { budgetProgress, nowLocalDateTime, type YearMonth } from "@domo/core";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/client.ts";
@@ -30,15 +30,26 @@ export async function familyRoutes(app: FastifyInstance, { db }: { db: Db }) {
 
   app.get("/api/family", async (req) => {
     const me = await requireMember(db, req);
-    const rows = await db.select().from(transactions).where(eq(transactions.householdId, me.householdId)).orderBy(desc(transactions.createdAt), desc(transactions.id)).limit(40);
+    const { month } = parse(z.object({ month: monthSchema.optional() }), req.query);
+    const rows = await db.select().from(transactions).where(month
+      ? and(eq(transactions.householdId, me.householdId), gte(transactions.occurredAt, `${month}-01`), lt(transactions.occurredAt, `${monthNext(month)}-01`))
+      : eq(transactions.householdId, me.householdId)).orderBy(desc(transactions.createdAt), desc(transactions.id)).limit(month ? 500 : 40);
     const ids = rows.map((r) => r.id);
     const [comments, reactions, alerts] = await Promise.all([
       ids.length ? db.select().from(transactionComments).where(inArray(transactionComments.transactionId, ids)).orderBy(transactionComments.createdAt) : [],
       ids.length ? db.select().from(transactionReactions).where(inArray(transactionReactions.transactionId, ids)) : [],
-      db.select().from(budgetAlerts).where(eq(budgetAlerts.householdId, me.householdId)).orderBy(desc(budgetAlerts.createdAt)).limit(20),
+      month
+        ? db.select().from(budgetAlerts).where(and(eq(budgetAlerts.householdId, me.householdId), eq(budgetAlerts.month, month))).orderBy(desc(budgetAlerts.createdAt))
+        : db.select().from(budgetAlerts).where(eq(budgetAlerts.householdId, me.householdId)).orderBy(desc(budgetAlerts.createdAt)).limit(20),
     ]);
     return { records: rows.map(dto), comments, reactions, alerts };
   });
+
+  function monthNext(month: YearMonth): YearMonth {
+    const year = Number(month.slice(0, 4));
+    const number = Number(month.slice(5, 7));
+    return `${number === 12 ? year + 1 : year}-${String(number === 12 ? 1 : number + 1).padStart(2, "0")}` as YearMonth;
+  }
 
   // 가계 공유 알림을 한 번만 만든다. 읽기 API는 상태를 변경하지 않는다.
   app.post("/api/budgets/check", async (req) => {

@@ -238,7 +238,7 @@ function TargetDetail({ target, icon, onBack, onUpdate, onRemove }: DetailProps)
           <Trash2 size={17} aria-hidden="true" />
         </button>
       </div>
-      <div className="md-detail-body">
+      <div className="md-detail-body md-detail-body-fill">
         <div className="field">
           <div className="field-label">
             <span>알림 감시</span>

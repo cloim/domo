@@ -9,12 +9,12 @@ import {
   type PaymentMethod,
   type PaymentMethodInput,
 } from "@domo/core";
-import { Banknote, ChevronLeft, CreditCard, Plus, Search, Trash2 } from "lucide-react";
+import { Banknote, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
-import { SortableList } from "../../components/SortableList.tsx";
+import { DndSortableList } from "../../components/SortableList.tsx";
 import { api } from "../../lib/api.ts";
 import { dayLabel, dayOptionLabel, formatShortDate, formatWon } from "../../lib/format.ts";
 import { useHousehold, useHouseholdMutation, type HouseholdData } from "../../lib/queries.ts";
@@ -40,6 +40,7 @@ export function PaymentMethodsSection() {
   const [params, setParams] = useSearchParams();
   const twoPane = useMedia(MD_TWO_PANE);
   const [query, setQuery] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
 
   const methods = data!.paymentMethods;
   const q = query.trim().toLowerCase();
@@ -68,11 +69,13 @@ export function PaymentMethodsSection() {
           </div>
         </div>
         <div className="md-list-body">
-          <SortableList items={active} disabled={!!q || reorder.isPending}
+          <DndSortableList items={active} disabled={!!q || reorder.isPending}
             onReorder={(ids) => reorder.mutate(ids, { onError: (err) => void dialog.alert("순서를 바꾸지 못했습니다", err.message) })}
             renderItem={(m) => <MethodItem method={m} bill={bills.get(m.id)} current={m.id === selectedId} onSelect={() => select(m.id)} />} />
-          {inactive.length > 0 && <div className="md-group">사용 안 함</div>}
-          {inactive.map((m) => (
+          {inactive.length > 0 && <button type="button" className="md-group-toggle" aria-expanded={showInactive} onClick={() => setShowInactive((open) => !open)}>
+            {showInactive ? <ChevronDown size={15} aria-hidden="true" /> : <ChevronRight size={15} aria-hidden="true" />}사용 안 함 <span>{inactive.length}</span>
+          </button>}
+          {showInactive && inactive.map((m) => (
             <MethodItem key={m.id} method={m} current={m.id === selectedId} onSelect={() => select(m.id)} />
           ))}
           {visible.length === 0 && <p className="hint" style={{ padding: "12px 10px" }}>검색 결과가 없어요.</p>}
@@ -256,6 +259,8 @@ function MethodEditor({ data, method, bill, onBack, onSaved }: EditorProps) {
           <ChevronLeft size={20} aria-hidden="true" />
         </button>
         <h2>{method ? method.name : "새 카드"}</h2>
+        {method && <button type="button" className="btn btn-danger-soft btn-sm" onClick={() => void onDelete()} disabled={remove.isPending}><Trash2 size={16} aria-hidden="true" /> 삭제</button>}
+        <button type="submit" className="btn btn-primary btn-sm" disabled={save.isPending}>{save.isPending ? "저장 중" : method ? "저장" : "추가"}</button>
       </div>
 
       {isCard && (
@@ -270,7 +275,7 @@ function MethodEditor({ data, method, bill, onBack, onSaved }: EditorProps) {
           <button id="pm-target-tab" type="button" role="tab" aria-selected={tab === "target"} tabIndex={tab === "target" ? 0 : -1} aria-controls="pm-target-panel" onClick={() => setTab("target")}>월 목표</button>
         </div>
       )}
-      <div className="md-detail-body">
+      <div className="md-detail-body md-detail-body-fill">
         {isCard && tab === "target" && (
           <div id="pm-target-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--field-gap)" }} role="tabpanel" aria-labelledby="pm-target-tab">
             <div className="field">
@@ -499,16 +504,6 @@ function MethodEditor({ data, method, bill, onBack, onSaved }: EditorProps) {
         </div>
       </div>
 
-      <div className="md-detail-foot">
-        {method && (
-          <button type="button" className="btn btn-text-danger" onClick={() => void onDelete()} disabled={remove.isPending}>
-            <Trash2 size={17} aria-hidden="true" /> 삭제
-          </button>
-        )}
-        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
-          {save.isPending ? "저장 중" : method ? "저장" : "추가"}
-        </button>
-      </div>
     </form>
   );
 }
