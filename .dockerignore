@@ -1,0 +1,13 @@
+.git
+.worktrees
+.agents
+%programdata%
+node_modules
+apps/*/node_modules
+packages/*/node_modules
+apps/web/dist
+apps/web/android
+release
+docs
+.env*
+*.log

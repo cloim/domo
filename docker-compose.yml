@@ -13,5 +13,33 @@ services:
     volumes:
       - domo-pg:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    image: domo-app:latest
+    container_name: domo-app
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - HOST=127.0.0.1
+      - PORT=4300
+      - DATABASE_URL=postgres://domo:${DOMO_DB_PASSWORD:-domo}@127.0.0.1:5434/domo
+      - WEB_DIST=/app/apps/web/dist
+      - TZ=Asia/Seoul
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:4300/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
 volumes:
   domo-pg:

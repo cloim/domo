@@ -6,6 +6,8 @@
   "packageManager": "pnpm@10.33.2",
   "scripts": {
     "db:up": "docker compose up -d db",
+    "docker:build": "docker compose build app",
+    "docker:up": "docker compose up -d",
     "dev:server": "pnpm --filter @domo/server dev",
     "dev:web": "pnpm --filter @domo/web dev",
     "dev:server:agent": "pnpm --filter @domo/server dev:agent",
@@ -13,6 +15,7 @@
     "build": "pnpm --filter @domo/web build",
     "build:check": "pnpm --filter @domo/web typecheck && pnpm --filter @domo/web exec vite build --outDir ../../release/web-check --emptyOutDir",
     "start": "pnpm --filter @domo/server start",
+    "start:prod": "pnpm --filter @domo/server start:prod",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "release:android": "node scripts/release-android.mjs"
