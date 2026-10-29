@@ -5,7 +5,7 @@
 ## 기본 개발 환경
 
 - 구성: `packages/core`(도메인 로직), `apps/server`(Fastify, Drizzle ORM, PostgreSQL), `apps/web`(React 웹앱, Capacitor 안드로이드 앱)
-- 운영 환경: 포트 4300, DB `domo`, 설정 `.env` (StackPad `cloimism` 패드셋의 `Domo` 패드에서 관리)
+- 운영 환경: 포트 4300, DB `domo`, 설정 `.env`, Docker 컨테이너 `domo-app` (StackPad 등록 없이 독립 Docker 컨테이너로 상시 구동)
 - 개발 환경: 화면 포트 5173(Vite), API 포트 4310, DB `domo`(포트 5434), 설정 `.env.development` (StackPad `개발` 패드셋의 `Domo Dev` 패드에서 관리)
 - 에이전트 로컬 실행: `pnpm dev:server:agent`와 `pnpm dev:web:agent`를 사용합니다. 포트 4320, 5174와 DB `domo_test`를 사용합니다. 일반 개발 서버를 에이전트 작업에 사용하지 않습니다.
 - 코드 검증 빌드: 운영 웹 출력 보호를 위해 `pnpm build:check`를 사용합니다.

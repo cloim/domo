@@ -30,14 +30,16 @@ pnpm dev:server:agent              # 에이전트 전용 API, localhost:4320, do
 pnpm dev:web:agent                 # 에이전트 전용 화면 http://localhost:5174 (/api 는 4320으로)
 pnpm test                          # 테스트는 domo_test DB
 pnpm build:check                   # 검증 빌드는 release/web-check, 운영 웹 출력과 분리
+pnpm docker:build                  # 운영 도커 이미지 빌드 (domo-app)
+pnpm docker:up                     # 운영 도커 컨테이너 기동
 ```
 
-### StackPad 패드 구성
+### 운영 및 StackPad 구성
 
-- **운영 패드 (Domo)**: `cloimism` 패드셋 (슬롯 5)
-  - `Server`: 포트 `4300` (`pnpm start`, 웹 빌드 서빙 및 API 제공, `https://domo.cloimism.com` 연결)
+- **운영 서비스**: 독립 Docker 컨테이너로 상시 구동 (`restart: unless-stopped`)
+  - `Server`: Docker 컨테이너 `domo-app` (포트 `4300`, 웹 빌드 서빙 및 API 제공, `https://domo.cloimism.com` 연결)
   - DB는 독립 Docker 컨테이너(`domo-db`, 포트 5434)로 상시 구동
-- **개발 패드 (Domo Dev)**: `개발` 패드셋 (슬롯 9)
+- **개발 패드 (Domo Dev)**: StackPad `cloimism` 패드셋 (슬롯 1)
   - `Server`: 개발 API 포트 `4310` (`pnpm dev`, `domo` DB 연결)
   - `Web`: 개발 화면 포트 `5173` (`pnpm dev`, Vite HMR 지원 및 `http://localhost:5173`)
 
