@@ -1,3 +1,4 @@
+import { generateId } from "@domo/core";
 import "@fontsource/ibm-plex-sans-kr/400.css";
 import "@fontsource/ibm-plex-sans-kr/500.css";
 import "@fontsource/ibm-plex-sans-kr/600.css";
@@ -6,6 +7,12 @@ import "@fontsource-variable/hahmlet";
 import "./components/Modal/modal.css";
 import "./components/SelectControl/select-control.css";
 import "./styles.css";
+
+// HTTP 비보안 컨텍스트(사설 IP 접속 등)에서 crypto.randomUUID 미지원 대비 폴리필
+if (typeof crypto !== "undefined" && typeof crypto.randomUUID !== "function") {
+  // @ts-expect-error polyfill for non-secure context
+  crypto.randomUUID = generateId;
+}
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

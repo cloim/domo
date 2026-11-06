@@ -1,4 +1,4 @@
-import { applyNotifyTemplate, notificationMatchText, NOTIFY_MATCH_FIELDS, validateNotifyPattern, type NotifyTemplate, type NotifyMatchField, type TransactionKind } from "@domo/core";
+import { applyNotifyTemplate, generateId, notificationMatchText, NOTIFY_MATCH_FIELDS, validateNotifyPattern, type NotifyTemplate, type NotifyMatchField, type TransactionKind } from "@domo/core";
 import { ChevronLeft, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -107,7 +107,7 @@ function TemplateEditor({ source, data, targets, all, template, onBack, onSaved 
   const [draft, setDraft] = useState<NotifyTemplate>(
     () =>
       template ? { ...template, matchField: template.matchField ?? "title_body" } : {
-        id: crypto.randomUUID(),
+        id: generateId(),
         name: "",
         packageName: fromApp ?? targets[0]?.packageName ?? "",
         kind: "expense",

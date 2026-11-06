@@ -1,4 +1,4 @@
-import { addMonths, monthRange, shiftMonth, type YearMonth, type Category, type DateRange, type MemberRole, type PaymentMethod, type Transaction, type TransactionInput } from "@domo/core";
+import { addMonths, generateId, monthRange, shiftMonth, type YearMonth, type Category, type DateRange, type MemberRole, type PaymentMethod, type Transaction, type TransactionInput } from "@domo/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { api, session } from "./api.ts";
@@ -77,7 +77,7 @@ export function useSaveTransaction() {
       if (identity !== session.get()) throw new Error("계정이 변경되었습니다. 다시 시도해 주세요.");
       const snapshots = qc.getQueriesData<Transaction[]>({ queryKey: ["transactions"] });
       const previous = snapshots.flatMap(([, rows]) => rows ?? []).find((t) => t.id === id);
-      const optimistic: Transaction = { ...input, id: id ?? crypto.randomUUID(), memberId: previous?.memberId ?? qc.getQueryData<HouseholdData>(keys.household)?.me.memberId ?? "", recurringId: previous?.recurringId, settlementMethodId: previous?.settlementMethodId };
+      const optimistic: Transaction = { ...input, id: id ?? generateId(), memberId: previous?.memberId ?? qc.getQueryData<HouseholdData>(keys.household)?.me.memberId ?? "", recurringId: previous?.recurringId, settlementMethodId: previous?.settlementMethodId };
       for (const [key, rows] of snapshots) {
         if (!rows) continue;
         qc.setQueryData(key, [...rows.filter((t) => t.id !== optimistic.id), ...(overlaps(optimistic, key) ? [optimistic] : [])]);
