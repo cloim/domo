@@ -1,5 +1,5 @@
-import { budgetProgress, nowLocalDateTime, type YearMonth } from "@domo/core";
-import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { budgetProgress, monthRange, nowLocalDateTime, type YearMonth } from "@domo/core";
+import { and, desc, eq, gte, inArray, lt, lte } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/client.ts";
@@ -55,11 +55,18 @@ export async function familyRoutes(app: FastifyInstance, { db }: { db: Db }) {
   app.post("/api/budgets/check", async (req) => {
     const me = await requireMember(db, req);
     const month = nowLocalDateTime().slice(0, 7) as YearMonth;
+    const range = monthRange(month);
     const [bs, cats, methods, rows] = await Promise.all([
       db.select().from(budgets).where(and(eq(budgets.householdId, me.householdId), eq(budgets.month, month))),
       db.select().from(categories).where(eq(categories.householdId, me.householdId)),
       db.select().from(paymentMethods).where(eq(paymentMethods.householdId, me.householdId)),
-      db.select().from(transactions).where(eq(transactions.householdId, me.householdId)),
+      db.select().from(transactions).where(
+        and(
+          eq(transactions.householdId, me.householdId),
+          lte(transactions.occurredAt, `${range.end} 23:59:59`),
+          gte(transactions.lastInstallmentAt, `${range.start} 00:00:00`),
+        ),
+      ),
     ]);
     const progress = budgetProgress(bs.map((b) => ({ ...b, month })), rows.map(dto), cats.map((c) => ({ ...c, archived: !!c.archivedAt })), methods.map((m) => ({ ...m, archived: !!m.archivedAt })), month);
     for (const b of progress.filter((b) => b.ratio >= 0.8)) await db.insert(budgetAlerts).values({ householdId: me.householdId, month, categoryId: b.categoryId, amount: b.amount, spent: b.spent }).onConflictDoNothing();

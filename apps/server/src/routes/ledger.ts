@@ -118,10 +118,14 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
 
   /** 입력값의 분류와 지출수단이 이 가계 소속이며 종류가 맞는지 확인한다. */
   async function assertRefs(me: MemberRow, input: TransactionInput) {
-    const [category] = await db.select().from(categories).where(and(eq(categories.id, input.categoryId), eq(categories.householdId, me.householdId)));
+    const categoryPromise = db.select().from(categories).where(and(eq(categories.id, input.categoryId), eq(categories.householdId, me.householdId)));
+    const methodPromise = input.paymentMethodId
+      ? db.select().from(paymentMethods).where(and(eq(paymentMethods.id, input.paymentMethodId), eq(paymentMethods.householdId, me.householdId)))
+      : Promise.resolve([]);
+    const [[category], methods] = await Promise.all([categoryPromise, methodPromise]);
     if (!category || category.kind !== input.kind || !category.parentId) throw new HttpError(400, "소분류를 다시 선택해 주세요.");
     if (input.paymentMethodId) {
-      const [method] = await db.select().from(paymentMethods).where(and(eq(paymentMethods.id, input.paymentMethodId), eq(paymentMethods.householdId, me.householdId)));
+      const method = methods[0];
       if (!method) throw new HttpError(400, "지출수단을 다시 선택해 주세요.");
       if (!allowsInstallment(method) && input.installmentMonths !== 1) throw new HttpError(400, "할부는 신용카드에서만 가능합니다.");
     }
@@ -159,7 +163,19 @@ export async function ledgerRoutes(app: FastifyInstance, { db }: { db: Db }) {
 
   app.get("/api/transactions/suggestions", async (req) => {
     const me = await requireMember(db, req);
-    const rows = await db.select().from(transactions).where(eq(transactions.householdId, me.householdId)).orderBy(desc(transactions.occurredAt), desc(transactions.createdAt));
+    const rows = await db
+      .select({
+        kind: transactions.kind,
+        counterparty: transactions.counterparty,
+        categoryId: transactions.categoryId,
+        paymentMethodId: transactions.paymentMethodId,
+        amount: transactions.amount,
+        occurredAt: transactions.occurredAt,
+      })
+      .from(transactions)
+      .where(eq(transactions.householdId, me.householdId))
+      .orderBy(desc(transactions.occurredAt), desc(transactions.createdAt))
+      .limit(1000);
     const found = new Map<string, { counterparty: string; kind: "expense" | "income"; categoryId: string; paymentMethodId: string | null; amount: number; frequency: number; recent: string }>();
     for (const t of rows) {
       const key = `${t.kind}:${t.counterparty}`;
