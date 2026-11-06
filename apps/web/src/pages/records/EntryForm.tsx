@@ -8,7 +8,7 @@ import {
   type TransactionInput,
   type TransactionKind,
 } from "@domo/core";
-import { Lock, Repeat, Trash2 } from "lucide-react";
+import { Loader2, Lock, Repeat, Trash2 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useDialog } from "../../components/Dialogs.tsx";
 import SelectControl from "../../components/SelectControl/index.ts";
@@ -92,6 +92,8 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
   const [occurredAt, setOccurredAt] = useState(first.occurredAt);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [excluding, setExcluding] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const isSaving = submitting || save.isPending;
 
   // 다른 기록을 고르거나 새 기록, 알림 값으로 바뀌면 폼을 다시 채운다.
   useEffect(() => {
@@ -196,6 +198,7 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (isSaving) return;
     const input: TransactionInput = {
       kind,
       paymentMethodId: kind === "expense" ? paymentMethodId : null,
@@ -216,17 +219,20 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
       setErrors(next);
       return;
     }
+    setSubmitting(true);
     try {
       const saved = await save.mutateAsync({ id: transaction?.id, input: parsed.data, pendingId: prefill?.pendingId });
       if (parsed.data.paymentMethodId) localStorage.setItem(LAST_METHOD_KEY, parsed.data.paymentMethodId);
       await onDone(saved);
     } catch (err) {
       await dialog.alert("저장하지 못했습니다", (err as Error).message);
+    } finally {
+      setSubmitting(false);
     }
   }
 
   async function onDelete() {
-    if (!transaction) return;
+    if (!transaction || isSaving) return;
     const ok = await dialog.confirm({
       title: "기록 삭제",
       message: transaction.installmentMonths > 1 ? `${transaction.installmentMonths}개월 할부 전체 회차가 함께 삭제됩니다.` : `${transaction.counterparty} 기록을 삭제할까요?`,
@@ -248,7 +254,7 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
     <form className="entry-form" onSubmit={submit} noValidate>
       <div className="entry-form-body">
         {/* fieldset은 flex 스크롤 컨테이너로 쓰면 높이 제한이 풀려 비활성화 용도로만 쓴다. */}
-        <fieldset disabled={!canEdit} className="entry-form-fields">
+        <fieldset disabled={!canEdit || isSaving} className="entry-form-fields">
           {!canEdit && (
             <div className="readonly-note">
               <Lock size={15} aria-hidden="true" /> {author?.displayName ?? "다른 구성원"}님이 작성한 기록이라 볼 수만 있어요.
@@ -439,18 +445,43 @@ export function EntryForm({ data, kind: initialKind, transaction, prefill = null
 
       {canEdit && (
         <div className="entry-form-foot">
-          {onExclude && !transaction && <button type="button" className="btn btn-ghost" disabled={excluding || save.isPending} onClick={async () => {
-            setExcluding(true);
-            try { await onExclude(); } catch (err) { await dialog.alert("제외하지 못했습니다", (err as Error).message); }
-            finally { setExcluding(false); }
-          }}>{excluding ? "제외 중" : "제외하기"}</button>}
+          {onExclude && !transaction && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={excluding || isSaving}
+              onClick={async () => {
+                setExcluding(true);
+                try {
+                  await onExclude();
+                } catch (err) {
+                  await dialog.alert("제외하지 못했습니다", (err as Error).message);
+                } finally {
+                  setExcluding(false);
+                }
+              }}
+            >
+              {excluding ? "제외 중" : "제외하기"}
+            </button>
+          )}
           {transaction && (
-            <button type="button" className="btn btn-danger-soft" onClick={onDelete} disabled={remove.isPending}>
+            <button
+              type="button"
+              className="btn btn-danger-soft"
+              onClick={onDelete}
+              disabled={remove.isPending || isSaving}
+            >
               <Trash2 size={17} aria-hidden="true" /> 삭제
             </button>
           )}
-          <button type="submit" className="btn btn-primary" disabled={save.isPending || excluding}>
-            {save.isPending ? "저장 중" : transaction ? "수정 저장" : `${label} 기록`}
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={isSaving || excluding}
+            aria-busy={isSaving}
+          >
+            {isSaving && <Loader2 size={16} className="spin" aria-hidden="true" />}
+            {isSaving ? "저장 중…" : transaction ? "수정 저장" : `${label} 기록`}
           </button>
         </div>
       )}

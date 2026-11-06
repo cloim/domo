@@ -222,7 +222,8 @@ a { color: inherit; }
 .btn-danger-soft:hover { background: color-mix(in oklab, var(--danger-soft) 78%, var(--danger)); }
 .btn-text-danger { color: var(--danger); }
 .btn-text-danger:hover { background: var(--danger-soft); }
-.btn:disabled { opacity: 0.5; cursor: default; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn[aria-busy="true"] { cursor: wait; pointer-events: none; }
 .btn-block { width: 100%; }
 .btn-sm { height: 34px; padding: 0 12px; font-size: 13px; }
 
@@ -419,6 +420,8 @@ textarea.input { height: auto; min-height: 72px; padding: 10px 12px; resize: ver
 .sheet-head h2 { margin: 0; font-family: var(--font-display); font-size: 18px; }
 @keyframes rise { from { transform: translateY(40%); opacity: 0; } }
 @keyframes fade { from { opacity: 0; } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spin { animation: spin 0.8s linear infinite; flex-shrink: 0; }
 
 /* 기록 입력 폼 */
 .entry-form { display: flex; flex: 1; min-height: 0; flex-direction: column; }

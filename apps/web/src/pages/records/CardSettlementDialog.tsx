@@ -1,5 +1,6 @@
 import type { CardSettlement, YearMonth } from "@domo/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Modal } from "../../components/Modal/index.js";
 import { api } from "../../lib/api.ts";
@@ -21,7 +22,8 @@ export function CardSettlementDialog({ month, onClose }: { month: YearMonth; onC
   const checked = eligible.filter((r) => selected.includes(r.paymentMethodId));
   return (
     <Modal isOpen onClose={() => !approve.isPending && onClose()} title={`${month} 카드 정산`} size="md"
-      footer={<button type="button" className="btn btn-accent" disabled={approve.isPending || !checked.length || preview.isFetching || preview.isError} onClick={() => approve.mutate()}>
+      footer={<button type="button" className="btn btn-accent" disabled={approve.isPending || !checked.length || preview.isFetching || preview.isError} aria-busy={approve.isPending} onClick={() => approve.mutate()}>
+        {approve.isPending && <Loader2 size={16} className="spin" aria-hidden="true" />}
         {approve.isPending ? "기록 중…" : `${formatWon(checked.reduce((s, r) => s + r.amount, 0))}원 정산 기록`}
       </button>}>
       <p className="hint">선택한 카드대금을 결제일의 현금 지출로 기록해요. 출금 예정 기록이며 실제 납부 여부는 별도로 확인해 주세요.</p>
