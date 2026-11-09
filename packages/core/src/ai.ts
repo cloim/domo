@@ -23,6 +23,8 @@ export const AI_PROVIDERS = [
   { id: "gemini", label: "Gemini (Vertex AI)", format: "gemini", baseUrl: "https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:streamGenerateContent", model: "gemini-3.6-flash" },
   { id: "anthropic", label: "Claude (Anthropic)", format: "openai", baseUrl: "https://api.anthropic.com/v1", model: "" },
   { id: "openai", label: "OpenAI", format: "openai", baseUrl: "https://api.openai.com/v1", model: "" },
+  // https://docs.exaone.ai/ko/docs/k-exaone-2.5 : OpenAI 호환 /v1/chat/completions, 모델 목록 API는 없다.
+  { id: "exaone", label: "EXAONE (LG AI연구원)", format: "openai", baseUrl: "https://api.exaone.ai/v1", model: "k-exaone_v2.5", models: ["k-exaone_v2.5"] },
   { id: "custom", label: "기타 OpenAI 호환", format: "openai", baseUrl: "", model: "" },
 ] as const satisfies readonly AiProvider[];
 

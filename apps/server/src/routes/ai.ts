@@ -2,6 +2,7 @@ import {
   aiAnalyzeSchema,
   aiConfigSchema,
   aiFormatOf,
+  aiProviderOf,
   aiRequestSchema,
   aiSettingsInputSchema,
   applyNotifyTemplate,
@@ -23,6 +24,14 @@ import { assertPublicHttps } from "../netguard.ts";
 import { decryptSecret, encryptSecret } from "../secret.ts";
 
 const trimSlash = (url: string) => url.replace(/\/+$/, "");
+
+/**
+ * OpenAI 호환 요청에 사업자별로 덧붙이는 값.
+ * EXAONE 은 추론이 늘 켜져 있고 추론 토큰도 max_tokens 에 들어가서, 한도를 넉넉히 두고 추론 깊이를 낮춰 응답을 빠르게 받는다.
+ */
+const OPENAI_TUNING: Record<string, { maxTokens?: number; extra?: Record<string, unknown> }> = {
+  exaone: { maxTokens: 8192, extra: { reasoning_effort: "low" } },
+};
 
 /** 서비스가 돌려준 오류 본문에서 사람이 읽을 문구를 꺼낸다. Gemini 스트리밍은 배열로 온다. */
 function errorMessage(data: unknown): string {
@@ -84,12 +93,14 @@ export async function completeText(config: AiConfig, key: string, system: string
       .map((p) => p.text ?? "")
       .join("");
   }
+  const tuning = OPENAI_TUNING[config.provider];
   const data = (await send(
     `${trimSlash(config.baseUrl)}/chat/completions`,
     { authorization: `Bearer ${key}` },
     {
       model: config.model,
-      max_tokens: 2000,
+      max_tokens: tuning?.maxTokens ?? 2000,
+      ...tuning?.extra,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -170,6 +181,8 @@ export async function aiRoutes(app: FastifyInstance, { db, config }: { db: Db; c
     const body = parse(aiRequestSchema, req.body);
     const { cfg, key } = await resolve(userIdOf(req), body);
     if (aiFormatOf(cfg.provider) !== "openai") return [];
+    const preset = aiProviderOf(cfg.provider)?.models;
+    if (preset) return [...preset];
     const data = (await send(`${trimSlash(cfg.baseUrl)}/models`, { authorization: `Bearer ${key}` }, undefined, config.aiAllowPrivateHosts)) as { data?: { id?: string }[]; models?: { name?: string }[] };
     const ids = [...(data?.data ?? []).map((m) => m.id), ...(data?.models ?? []).map((m) => m.name)].map((id) => (id ?? "").replace(/^models\//, "")).filter(Boolean);
     return [...new Set(ids)].sort();

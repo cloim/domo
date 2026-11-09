@@ -281,25 +281,28 @@ describe("AI 설정과 알림 분석", () => {
     expect(seen.at(-1)).toMatchObject({ path: "/g/models/gemini-3.6-flash:streamGenerateContent", goog: "g-key" });
 
     // 다른 사업자로 바꿔도 이전 사업자의 주소, 모델, 키가 남아 키 없이 되돌릴 수 있다.
-    const other = { provider: "openai", baseUrl: `${base}/v1`, model: "model-b" };
-    expect((await user("PUT", "/api/ai/settings", { ...other, key: "ex-key" })).statusCode).toBe(200);
+    const exaone = { provider: "exaone", baseUrl: `${base}/v1`, model: "k-exaone_v2.5" };
+    expect((await user("PUT", "/api/ai/settings", { ...exaone, key: "ex-key" })).statusCode).toBe(200);
     const switched = (await user("GET", "/api/ai/settings")).json();
-    expect(switched).toMatchObject({ ...other, hasKey: true });
+    expect(switched).toMatchObject({ ...exaone, hasKey: true });
     expect(switched.profiles).toHaveLength(2);
     expect(switched.profiles).toContainEqual({ ...openai, hasKey: true });
+    // EXAONE 은 모델 목록 API가 없어 정해 둔 목록을 돌려주고, 추론 토큰 몫까지 한도를 넉넉히 둔다.
+    expect((await user("POST", "/api/ai/models", {})).json()).toEqual(["k-exaone_v2.5"]);
     expect((await user("POST", "/api/ai/analyze-notification", { sample })).json()).toMatchObject({ problem: null });
-    expect(seen.at(-1)).toMatchObject({ auth: "Bearer ex-key", body: { model: "model-b" } });
+    expect(seen.at(-1)).toMatchObject({ auth: "Bearer ex-key", body: { model: "k-exaone_v2.5", max_tokens: 8192, reasoning_effort: "low" } });
     // 저장하지 않은 설정으로 시험할 때도 그 사업자에 저장된 키를 쓴다.
     await user("POST", "/api/ai/analyze-notification", { sample, config: openai });
-    expect(seen.at(-1)).toMatchObject({ auth: "Bearer sk-secret", body: { model: "model-a" } });
+    expect(seen.at(-1)).toMatchObject({ auth: "Bearer sk-secret", body: { max_tokens: 2000 } });
+    expect(seen.at(-1)?.body).not.toHaveProperty("reasoning_effort");
 
     expect((await user("PUT", "/api/ai/settings", openai)).statusCode).toBe(200);
     expect((await user("GET", "/api/ai/settings")).json()).toMatchObject({ ...openai, hasKey: true });
     // 사용 중이 아닌 사업자의 키만 지워도 지금 쓰는 설정은 그대로다.
-    expect((await user("DELETE", "/api/ai/settings/openai/key")).statusCode).toBe(200);
+    expect((await user("DELETE", "/api/ai/settings/exaone/key")).statusCode).toBe(200);
     const afterDelete = (await user("GET", "/api/ai/settings")).json();
     expect(afterDelete).toMatchObject({ ...openai, hasKey: true });
-    expect(afterDelete.profiles).toContainEqual({ ...other, hasKey: false });
+    expect(afterDelete.profiles).toContainEqual({ ...exaone, hasKey: false });
 
     // 키를 지우고, 서비스 오류는 문구를 담아 돌려준다.
     await user("PUT", "/api/ai/settings", { ...openai, key: null });
