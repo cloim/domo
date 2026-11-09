@@ -10,8 +10,10 @@ import {
   notifyAnalysisSchema,
   validateNotifyPattern,
   type AiConfig,
+  type AiProfile,
+  type AiSettings,
 } from "@domo/core";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Config } from "../config.ts";
 import type { Db } from "../db/client.ts";
@@ -111,37 +113,56 @@ function extractJson(text: string): unknown {
 }
 
 export async function aiRoutes(app: FastifyInstance, { db, config }: { db: Db; config: Config }) {
-  async function saved(userId: string) {
-    const [row] = await db.select().from(userAiSettings).where(eq(userAiSettings.userId, userId));
-    return row ?? null;
-  }
+  /** 사업자별로 저장된 설정 전부. 지금 쓰는 설정은 active 인 행이다. */
+  const savedRows = (userId: string) => db.select().from(userAiSettings).where(eq(userAiSettings.userId, userId));
+  const profileOf = (row: typeof userAiSettings.$inferSelect): AiProfile => ({ provider: row.provider as AiConfig["provider"], baseUrl: row.baseUrl, model: row.model, hasKey: !!row.keyEnc });
 
-  /** 요청에 담긴 설정과 키를 먼저 쓰고, 없으면 저장된 값을 쓴다. */
+  /** 요청에 담긴 설정과 키를 먼저 쓰고, 없으면 저장된 값을 쓴다. 키는 그 설정의 사업자에 저장된 것만 쓴다. */
   async function resolve(userId: string, body: { config?: AiConfig; key?: string }) {
-    const row = await saved(userId);
-    const cfg = body.config ?? (row ? { provider: row.provider as AiConfig["provider"], baseUrl: row.baseUrl, model: row.model } : null);
+    const rows = await savedRows(userId);
+    const active = rows.find((r) => r.active);
+    const cfg = body.config ?? (active ? profileOf(active) : null);
     if (!cfg) throw new HttpError(400, "AI 서비스를 먼저 설정해 주세요.");
+    const row = rows.find((r) => r.provider === cfg.provider);
     const key = body.key ?? (row?.keyEnc ? decryptSecret(config, row.keyEnc) : null);
     if (!key) throw new HttpError(400, "API 키를 입력하거나 저장해 주세요.");
-    return { cfg, key };
+    return { cfg: { provider: cfg.provider, baseUrl: cfg.baseUrl, model: cfg.model }, key };
   }
 
-  app.get("/api/ai/settings", async (req) => {
-    const row = await saved(userIdOf(req));
-    if (!row) return null;
-    return { provider: row.provider, baseUrl: row.baseUrl, model: row.model, hasKey: !!row.keyEnc };
+  app.get("/api/ai/settings", async (req): Promise<AiSettings | null> => {
+    const rows = await savedRows(userIdOf(req));
+    const active = rows.find((r) => r.active);
+    if (!active) return null;
+    return { ...profileOf(active), profiles: rows.map(profileOf) };
   });
 
+  /** 고른 사업자의 설정을 저장하고 지금 쓰는 설정으로 바꾼다. 다른 사업자의 저장값은 그대로 둔다. */
   app.put("/api/ai/settings", async (req) => {
     const userId = userIdOf(req);
     const input = parse(aiSettingsInputSchema, req.body);
     if (!config.aiAllowPrivateHosts) await assertPublicHttps(input.baseUrl.replace("{model}", "model"));
     const keyEnc = input.key === undefined ? undefined : input.key === null ? null : encryptSecret(config, input.key);
-    const values = { provider: input.provider, baseUrl: input.baseUrl, model: input.model, updatedAt: new Date(), ...(keyEnc === undefined ? {} : { keyEnc }) };
+    const values = { baseUrl: input.baseUrl, model: input.model, active: true, updatedAt: new Date(), ...(keyEnc === undefined ? {} : { keyEnc }) };
+    await db.transaction(async (tx) => {
+      // 사용자당 active 는 하나만 허용하므로 나머지를 먼저 내린다.
+      await tx
+        .update(userAiSettings)
+        .set({ active: false })
+        .where(and(eq(userAiSettings.userId, userId), ne(userAiSettings.provider, input.provider)));
+      await tx
+        .insert(userAiSettings)
+        .values({ userId, provider: input.provider, ...values, keyEnc: keyEnc ?? null })
+        .onConflictDoUpdate({ target: [userAiSettings.userId, userAiSettings.provider], set: values });
+    });
+    return { ok: true };
+  });
+
+  /** 지금 쓰는 설정은 바꾸지 않고 그 사업자의 API 키만 지운다. */
+  app.delete<{ Params: { provider: string } }>("/api/ai/settings/:provider/key", async (req) => {
     await db
-      .insert(userAiSettings)
-      .values({ userId, ...values, keyEnc: keyEnc ?? null })
-      .onConflictDoUpdate({ target: userAiSettings.userId, set: values });
+      .update(userAiSettings)
+      .set({ keyEnc: null, updatedAt: new Date() })
+      .where(and(eq(userAiSettings.userId, userIdOf(req)), eq(userAiSettings.provider, req.params.provider)));
     return { ok: true };
   });
 

@@ -4,7 +4,7 @@ import { CircleCheck, CircleX, FlaskConical, KeyRound, RefreshCw, Trash2 } from 
 import { useEffect, useState } from "react";
 import { useDialog } from "../../../components/Dialogs.tsx";
 import SelectControl from "../../../components/SelectControl/index.ts";
-import { aiKeys, analyzeNotification, listModels, saveAiSettings, useAiSettings, type AnalysisResult } from "../../../lib/ai.ts";
+import { aiKeys, analyzeNotification, deleteAiKey, listModels, saveAiSettings, useAiSettings, type AnalysisResult } from "../../../lib/ai.ts";
 import { formatWon } from "../../../lib/format.ts";
 
 type TestState = { status: "running" } | { status: "ok"; result: AnalysisResult } | { status: "error"; ms: number; message: string };
@@ -31,7 +31,15 @@ export function AiSection() {
   }, [settings.data]);
 
   const format = aiFormatOf(config.provider);
-  const hasKey = !!settings.data?.hasKey;
+  const activeProvider = settings.data?.provider ?? null;
+  const profiles = settings.data?.profiles ?? [];
+  const profile = profiles.find((p) => p.provider === config.provider);
+  const hasKey = !!profile?.hasKey;
+  /** 이 사업자로 저장한 적이 있으면 그 주소와 모델을, 없으면 기본값을 채운다. 키는 서버에 남아 있어 다시 입력하지 않아도 된다. */
+  const configFor = (id: AiProviderId): AiConfig => {
+    const p = profiles.find((x) => x.provider === id);
+    return p ? { provider: p.provider, baseUrl: p.baseUrl, model: p.model } : presetConfig(id);
+  };
   const canCall = !!key.trim() || hasKey;
   const edit = (patch: Partial<AiConfig>) => {
     setConfig((c) => ({ ...c, ...patch }));
@@ -91,9 +99,9 @@ export function AiSection() {
 
   async function removeKey() {
     const ok = await dialog.confirm({ title: "API 키 삭제", message: "저장된 API 키를 지울까요?", confirmLabel: "삭제", danger: true });
-    if (!ok || !settings.data) return;
+    if (!ok) return;
     try {
-      await saveAiSettings({ provider: settings.data.provider, baseUrl: settings.data.baseUrl, model: settings.data.model, key: null });
+      await deleteAiKey(config.provider);
       await qc.invalidateQueries({ queryKey: aiKeys.settings });
     } catch (err) {
       await dialog.alert("삭제하지 못했습니다", (err as Error).message);
@@ -119,7 +127,8 @@ export function AiSection() {
             id="ai-provider"
             value={config.provider}
             onChange={(e) => {
-              setConfig(presetConfig(e.target.value as AiProviderId));
+              setConfig(configFor(e.target.value as AiProviderId));
+              setKey("");
               setModels(null);
               setTest(null);
             }}
@@ -127,9 +136,15 @@ export function AiSection() {
             {AI_PROVIDERS.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}
+                {p.id === activeProvider ? " (사용 중)" : profiles.some((x) => x.provider === p.id) ? " (저장됨)" : ""}
               </option>
             ))}
           </SelectControl>
+          {activeProvider && config.provider !== activeProvider && (
+            <span className="hint">
+              {profile ? "이전에 저장한 주소, 모델과 API 키를 불러왔어요. " : ""}저장하면 이 사업자로 바뀌고, 다른 사업자의 설정은 그대로 남아 언제든 되돌릴 수 있어요.
+            </span>
+          )}
         </div>
         <div className="field">
           <label className="field-label" htmlFor="ai-url">

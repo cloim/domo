@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { bigint, bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -12,15 +12,25 @@ export const users = pgTable("users", {
   createdAt: createdAt(),
 });
 
-/** 사용자별 AI 서비스 설정. API 키는 AES-256-GCM 으로 암호화해 둔다. */
-export const userAiSettings = pgTable("user_ai_settings", {
-  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
-  provider: text("provider").notNull(),
-  baseUrl: text("base_url").notNull(),
-  model: text("model").notNull(),
-  keyEnc: text("key_enc"),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+/**
+ * 사용자별 AI 서비스 설정. 사업자마다 한 행을 두어 다른 사업자로 바꿨다가 되돌려도 주소, 모델, 키가 남는다.
+ * active 인 행이 지금 쓰는 설정이며 사용자당 하나뿐이다. API 키는 AES-256-GCM 으로 암호화해 둔다.
+ */
+export const userAiSettings = pgTable(
+  "user_ai_settings",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    baseUrl: text("base_url").notNull(),
+    model: text("model").notNull(),
+    keyEnc: text("key_enc"),
+    active: boolean("active").notNull().default(true),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.provider] }), uniqueIndex("user_ai_settings_active_uq").on(t.userId).where(sql`${t.active}`)],
+);
 
 /** 알림 연동을 쓰는 휴대폰. 대상 앱과 템플릿은 기기별 사본을 두고 configVersion 으로 맞춘다. */
 export const notifyDevices = pgTable("notify_devices", {

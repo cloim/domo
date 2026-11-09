@@ -18,6 +18,9 @@ export interface AnalysisResult {
 /** 저장하지 않은 설정과 키로 시험할 때만 config, key 를 넘긴다. */
 export const saveAiSettings = (input: AiConfig & { key?: string | null }) => api("/api/ai/settings", { method: "PUT", body: input });
 
+/** 지금 쓰는 설정은 그대로 두고 그 사업자에 저장된 API 키만 지운다. */
+export const deleteAiKey = (provider: string) => api(`/api/ai/settings/${encodeURIComponent(provider)}/key`, { method: "DELETE" });
+
 export const listModels = (override: { config?: AiConfig; key?: string } = {}) => api<string[]>("/api/ai/models", { method: "POST", body: override });
 
 export const analyzeNotification = (sample: { appLabel: string; title: string; text: string; postedAt: string; matchField?: NotifyMatchField; rawText?: string | null; bigText?: string | null }, override: { config?: AiConfig; key?: string } = {}) =>

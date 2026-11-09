@@ -9,17 +9,31 @@ import { NOTIFY_MATCH_FIELDS } from "./notifyTemplate.ts";
 export const aiFormats = ["openai", "gemini"] as const;
 export type AiFormat = (typeof aiFormats)[number];
 
+export interface AiProvider {
+  id: string;
+  label: string;
+  format: AiFormat;
+  baseUrl: string;
+  model: string;
+  /** 모델 목록 API가 없는 서비스는 고를 수 있는 모델을 여기 적어 두고 서버가 이 목록을 돌려준다. */
+  models?: readonly string[];
+}
+
 export const AI_PROVIDERS = [
   { id: "gemini", label: "Gemini (Vertex AI)", format: "gemini", baseUrl: "https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:streamGenerateContent", model: "gemini-3.6-flash" },
   { id: "anthropic", label: "Claude (Anthropic)", format: "openai", baseUrl: "https://api.anthropic.com/v1", model: "" },
   { id: "openai", label: "OpenAI", format: "openai", baseUrl: "https://api.openai.com/v1", model: "" },
   { id: "custom", label: "기타 OpenAI 호환", format: "openai", baseUrl: "", model: "" },
-] as const;
+] as const satisfies readonly AiProvider[];
 
 export type AiProviderId = (typeof AI_PROVIDERS)[number]["id"];
 
+export function aiProviderOf(provider: string): AiProvider | undefined {
+  return (AI_PROVIDERS as readonly AiProvider[]).find((p) => p.id === provider);
+}
+
 export function aiFormatOf(provider: string): AiFormat {
-  return AI_PROVIDERS.find((p) => p.id === provider)?.format ?? "openai";
+  return aiProviderOf(provider)?.format ?? "openai";
 }
 
 /** 형식만 본다. https 와 공인 주소 여부는 서버가 요청 직전에 실제 IP로 확인한다(apps/server/src/netguard.ts). */
@@ -47,8 +61,13 @@ export type AiConfig = z.infer<typeof aiConfigSchema>;
 /** 저장: key 가 문자열이면 바꾸고, null 이면 지우고, 없으면 그대로 둔다. */
 export const aiSettingsInputSchema = aiConfigSchema.extend({ key: z.string().trim().min(1).max(500).nullable().optional() });
 
-export interface AiSettings extends AiConfig {
+export interface AiProfile extends AiConfig {
   hasKey: boolean;
+}
+
+/** 지금 쓰는 설정과, 사업자를 바꿨다 되돌릴 때 다시 채울 사업자별 저장값 */
+export interface AiSettings extends AiProfile {
+  profiles: AiProfile[];
 }
 
 /** 화면이 저장 전 설정과 키로 바로 시험해 볼 수 있게 둘 다 선택으로 받는다. 없으면 저장된 값을 쓴다. */

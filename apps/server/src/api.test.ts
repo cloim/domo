@@ -247,13 +247,13 @@ describe("고정지출", () => {
 describe("AI 설정과 알림 분석", () => {
   it("키는 암호화해 저장하고 돌려주지 않으며, 두 형식 모두 서버가 대신 호출한다", async () => {
     // 가짜 AI 서비스: OpenAI 호환과 Gemini 스트리밍 응답을 흉내 낸다.
-    const seen: { path: string; auth?: string; goog?: string }[] = [];
+    const seen: { path: string; auth?: string; goog?: string; body?: Record<string, unknown> }[] = [];
     const pattern = String.raw`(?<amount>[\d,]+)원\(\S+\)(?<month>\d{2})/(?<day>\d{2}) (?<hour>\d{2}):(?<minute>\d{2}) (?<counterparty>\S+)`;
     const answer = JSON.stringify({ name: "신한카드 승인", kind: "expense", pattern });
     const mock = Fastify();
     mock.get("/v1/models", async (req) => (seen.push({ path: req.url, auth: req.headers.authorization }), { data: [{ id: "model-b" }, { id: "model-a" }] }));
     // 모델이 JSON 앞에 설명을 붙여도 JSON 만 골라낸다.
-    mock.post("/v1/chat/completions", async (req) => (seen.push({ path: req.url, auth: req.headers.authorization }), { choices: [{ message: { content: `결과입니다\n${answer}` } }] }));
+    mock.post("/v1/chat/completions", async (req) => (seen.push({ path: req.url, auth: req.headers.authorization, body: req.body as Record<string, unknown> }), { choices: [{ message: { content: `결과입니다\n${answer}` } }] }));
     mock.post("/g/models/:model", async (req) => {
       seen.push({ path: req.url, goog: req.headers["x-goog-api-key"] as string });
       return [{ candidates: [{ content: { parts: [{ text: "생각", thought: true }, { text: answer.slice(0, 20) }] } }] }, { candidates: [{ content: { parts: [{ text: answer.slice(20) }] } }] }];
@@ -264,7 +264,7 @@ describe("AI 설정과 알림 분석", () => {
     const user = await login("ai@test.com", "에이아이");
     const openai = { provider: "custom", baseUrl: `${base}/v1`, model: "model-a" };
     expect((await user("PUT", "/api/ai/settings", { ...openai, key: "sk-secret" })).statusCode).toBe(200);
-    expect((await user("GET", "/api/ai/settings")).json()).toEqual({ ...openai, hasKey: true });
+    expect((await user("GET", "/api/ai/settings")).json()).toEqual({ ...openai, hasKey: true, profiles: [{ ...openai, hasKey: true }] });
     const [stored] = await db.execute(sql`SELECT key_enc FROM user_ai_settings`);
     expect(String((stored as { key_enc: string }).key_enc)).not.toContain("sk-secret");
 
@@ -279,6 +279,27 @@ describe("AI 설정과 알림 분석", () => {
     const r2 = (await user("POST", "/api/ai/analyze-notification", { sample, config: gemini, key: "g-key" })).json();
     expect(r2).toMatchObject({ problem: null, match: { amount: 12500 } });
     expect(seen.at(-1)).toMatchObject({ path: "/g/models/gemini-3.6-flash:streamGenerateContent", goog: "g-key" });
+
+    // 다른 사업자로 바꿔도 이전 사업자의 주소, 모델, 키가 남아 키 없이 되돌릴 수 있다.
+    const other = { provider: "openai", baseUrl: `${base}/v1`, model: "model-b" };
+    expect((await user("PUT", "/api/ai/settings", { ...other, key: "ex-key" })).statusCode).toBe(200);
+    const switched = (await user("GET", "/api/ai/settings")).json();
+    expect(switched).toMatchObject({ ...other, hasKey: true });
+    expect(switched.profiles).toHaveLength(2);
+    expect(switched.profiles).toContainEqual({ ...openai, hasKey: true });
+    expect((await user("POST", "/api/ai/analyze-notification", { sample })).json()).toMatchObject({ problem: null });
+    expect(seen.at(-1)).toMatchObject({ auth: "Bearer ex-key", body: { model: "model-b" } });
+    // 저장하지 않은 설정으로 시험할 때도 그 사업자에 저장된 키를 쓴다.
+    await user("POST", "/api/ai/analyze-notification", { sample, config: openai });
+    expect(seen.at(-1)).toMatchObject({ auth: "Bearer sk-secret", body: { model: "model-a" } });
+
+    expect((await user("PUT", "/api/ai/settings", openai)).statusCode).toBe(200);
+    expect((await user("GET", "/api/ai/settings")).json()).toMatchObject({ ...openai, hasKey: true });
+    // 사용 중이 아닌 사업자의 키만 지워도 지금 쓰는 설정은 그대로다.
+    expect((await user("DELETE", "/api/ai/settings/openai/key")).statusCode).toBe(200);
+    const afterDelete = (await user("GET", "/api/ai/settings")).json();
+    expect(afterDelete).toMatchObject({ ...openai, hasKey: true });
+    expect(afterDelete.profiles).toContainEqual({ ...other, hasKey: false });
 
     // 키를 지우고, 서비스 오류는 문구를 담아 돌려준다.
     await user("PUT", "/api/ai/settings", { ...openai, key: null });
