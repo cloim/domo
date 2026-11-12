@@ -103,6 +103,7 @@ public class DomoNotificationListener extends NotificationListenerService {
 
     private static String text(CharSequence value) {
         String result = value == null ? "" : value.toString().trim();
+        result = result.replace("\r\n", "\n").replace("\r", "\n");
         return result.length() > 4000 ? result.substring(0, 4000) : result;
     }
 

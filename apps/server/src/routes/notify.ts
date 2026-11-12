@@ -1,4 +1,4 @@
-import { NOTIFY_KEEP_DAYS, notifyAppsSchema, notifyDeviceConfigSchema, notifyUploadSchema, notifyRegistrationsSchema } from "@domo/core";
+import { NOTIFY_KEEP_DAYS, normalizeNewlines, notifyAppsSchema, notifyDeviceConfigSchema, notifyUploadSchema, notifyRegistrationsSchema } from "@domo/core";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -125,17 +125,19 @@ export async function notifyRoutes(app: FastifyInstance, { db, config }: { db: D
     const fresh = items.filter((i) => i.postedAt >= keepFrom);
     await db.transaction(async (tx) => {
       for (const i of fresh) {
+        const rawText = i.rawText !== undefined && i.rawText !== null ? normalizeNewlines(i.rawText) : (i.rawText ?? null);
+        const bigText = i.bigText !== undefined && i.bigText !== null ? normalizeNewlines(i.bigText) : (i.bigText ?? null);
         const values = {
             deviceId: device.id,
             localId: i.localId,
             packageName: i.packageName,
-            titleEnc: encryptSecret(config, i.title),
-            textEnc: encryptSecret(config, i.text),
+            titleEnc: encryptSecret(config, normalizeNewlines(i.title)),
+            textEnc: encryptSecret(config, normalizeNewlines(i.text)),
             postedAt: new Date(i.postedAt),
             matchedTemplateId: i.matchedTemplateId,
             eventKey: i.eventKey ?? null,
             revision: i.revision,
-            fieldsEnc: i.rawText !== undefined || i.bigText !== undefined ? encryptSecret(config, JSON.stringify({ rawText: i.rawText ?? null, bigText: i.bigText ?? null, notificationKey: i.notificationKey ?? null, eventAt: i.eventAt ?? null })) : null,
+            fieldsEnc: i.rawText !== undefined || i.bigText !== undefined ? encryptSecret(config, JSON.stringify({ rawText, bigText, notificationKey: i.notificationKey ?? null, eventAt: i.eventAt ?? null })) : null,
         };
         if (!i.eventKey) await tx.insert(notifyNotifications).values(values).onConflictDoNothing();
         else await tx.insert(notifyNotifications).values(values).onConflictDoUpdate({
@@ -154,16 +156,21 @@ export async function notifyRoutes(app: FastifyInstance, { db, config }: { db: D
     const q = parse(z.object({ packageName: z.string().max(200).optional(), limit: z.coerce.number().int().min(1).max(500).default(100) }), req.query);
     const where = q.packageName ? and(eq(notifyNotifications.deviceId, device.id), eq(notifyNotifications.packageName, q.packageName)) : eq(notifyNotifications.deviceId, device.id);
     const rows = await db.select().from(notifyNotifications).where(where).orderBy(desc(notifyNotifications.postedAt)).limit(q.limit);
-    return rows.map((r) => ({
-      id: r.localId,
-      packageName: r.packageName,
-      title: decryptSecret(config, r.titleEnc),
-      text: decryptSecret(config, r.textEnc),
-      postedAt: r.postedAt.getTime(),
-      matchedTemplateId: r.matchedTemplateId,
-      eventKey: r.eventKey,
-      ...(r.fieldsEnc ? JSON.parse(decryptSecret(config, r.fieldsEnc)) : { rawText: null, bigText: null, notificationKey: null, eventAt: null }),
-    }));
+    return rows.map((r) => {
+      const fields = r.fieldsEnc ? JSON.parse(decryptSecret(config, r.fieldsEnc)) : { rawText: null, bigText: null, notificationKey: null, eventAt: null };
+      return {
+        id: r.localId,
+        packageName: r.packageName,
+        title: normalizeNewlines(decryptSecret(config, r.titleEnc)),
+        text: normalizeNewlines(decryptSecret(config, r.textEnc)),
+        postedAt: r.postedAt.getTime(),
+        matchedTemplateId: r.matchedTemplateId,
+        eventKey: r.eventKey,
+        ...fields,
+        rawText: fields.rawText !== undefined && fields.rawText !== null ? normalizeNewlines(fields.rawText) : fields.rawText,
+        bigText: fields.bigText !== undefined && fields.bigText !== null ? normalizeNewlines(fields.bigText) : fields.bigText,
+      };
+    });
   });
 
   app.delete("/api/notify/devices/:id/notifications", async (req) => {

@@ -29,18 +29,23 @@ public final class NotifyMatcher {
         }
     }
 
+    public static String normalize(String text) {
+        if (text == null) return "";
+        return text.replace("\r\n", "\n").replace("\r", "\n");
+    }
+
     public static String body(String title, String text) {
-        return (title == null ? "" : title) + "\n" + (text == null ? "" : text);
+        return normalize(title) + "\n" + normalize(text);
     }
 
     public static String input(String field, String title, String body, String rawText, String bigText) {
         String content = bigText != null && !bigText.trim().isEmpty() ? bigText : rawText != null ? rawText : body;
         switch (field) {
             case "title_body": return body(title, content);
-            case "body": return content;
-            case "title": return title;
-            case "text": return rawText == null ? "" : rawText;
-            case "bigText": return bigText == null ? "" : bigText;
+            case "body": return normalize(content);
+            case "title": return normalize(title);
+            case "text": return normalize(rawText);
+            case "bigText": return normalize(bigText);
             default: return "";
         }
     }

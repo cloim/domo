@@ -62,6 +62,16 @@
       "expected": { "kind": "expense", "amount": 45900, "counterparty": "쿠팡", "memo": null, "occurredAt": "2026-10-20T20:00" }
     },
     {
+      "name": "본문에 CRLF(\\r\\n) 개행이 있어도 \\n 기준 패턴에 매칭된다",
+      "matchField": "title_body",
+      "pattern": "^(?<counterparty>.+)\\n(?<amount>[\\d,]+)원\\(\\d+건\\) 승인\\n.+\\n(?<month>\\d{1,2})/(?<day>\\d{1,2})$",
+      "kind": "expense",
+      "title": "SK텔레콤(자동납부)",
+      "text": "41,070원(1건) 승인\r\n쿠쿠 X LOCA(3*2*) \r\n11/11",
+      "postedAt": "2026-11-12T10:16",
+      "expected": { "kind": "expense", "amount": 41070, "counterparty": "SK텔레콤(자동납부)", "memo": null, "occurredAt": "2026-11-11T10:16" }
+    },
+    {
       "name": "패턴이 맞지 않으면 없음",
       "pattern": "승인 (?<amount>[\\d,]+)원",
       "kind": "expense",

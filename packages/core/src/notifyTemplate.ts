@@ -40,14 +40,19 @@ export function groupNotificationHistory<T extends NotificationFields & { packag
   return [...seen.values()];
 }
 
+/** 줄바꿈 문자를 표준 개행(\n)으로 맞춘다. 금융 알림 앱에 따라 섞여 오는 \r\n, \r을 통일한다. */
+export function normalizeNewlines(text: string | null | undefined): string {
+  return (text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
 export function notificationMatchText(field: NotifyMatchField, n: NotificationFields): string {
   const body = n.bigText?.trim() ? n.bigText : (n.rawText ?? n.text);
   switch (field) {
     case "title_body": return notificationBody(n.title, body);
-    case "body": return body;
-    case "title": return n.title;
-    case "text": return n.rawText ?? "";
-    case "bigText": return n.bigText ?? "";
+    case "body": return normalizeNewlines(body);
+    case "title": return normalizeNewlines(n.title);
+    case "text": return normalizeNewlines(n.rawText ?? "");
+    case "bigText": return normalizeNewlines(n.bigText ?? "");
   }
 }
 
@@ -62,7 +67,7 @@ export interface NotifyMatch {
 export const NOTIFY_GROUPS = ["amount", "counterparty", "memo", "month", "day", "hour", "minute"] as const;
 
 export function notificationBody(title: string, text: string): string {
-  return `${title}\n${text}`;
+  return `${normalizeNewlines(title)}\n${normalizeNewlines(text)}`;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
