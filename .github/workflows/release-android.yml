@@ -1,0 +1,105 @@
+name: Release Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36'
+
+      - name: Verify Tag Version matches package.json
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Android Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/keystore"
+          echo "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/keystore/domo.jks"
+          cat <<EOF > "${RUNNER_TEMP}/keystore/keystore.properties"
+          STORE_FILE_PATH=domo.jks
+          KEY_ALIAS=${KEY_ALIAS}
+          PASSWORD=${KEYSTORE_PASSWORD}
+          EOF
+
+      - name: Build Web App
+        env:
+          VITE_API_BASE: ${{ secrets.DOMO_PUBLIC_URL }}
+          DOMO_WEB_DIR: ../../release/android-web
+        run: |
+          pnpm --filter @domo/web typecheck
+          pnpm --filter @domo/web exec vite build --outDir ../../release/android-web --emptyOutDir
+
+      - name: Sync Capacitor Android
+        env:
+          DOMO_WEB_DIR: ../../release/android-web
+        run: |
+          cd apps/web
+          npx cap sync android
+
+      - name: Build Android Release APK
+        env:
+          DOMO_SIGNING_PROPERTIES: ${{ runner.temp }}/keystore/keystore.properties
+        run: |
+          cd apps/web/android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon -q
+
+      - name: Prepare APK Release Artifact
+        run: |
+          mkdir -p release
+          cp apps/web/android/app/build/outputs/apk/release/app-release.apk "release/domo-${GITHUB_REF_NAME}.apk"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" "release/domo-${GITHUB_REF_NAME}.apk" \
+            --title "도모 ${GITHUB_REF_NAME}" \
+            --generate-notes

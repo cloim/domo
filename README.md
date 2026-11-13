@@ -57,10 +57,16 @@ pnpm docker:up                     # 운영 도커 컨테이너 기동
 
 ## 안드로이드 릴리스
 
-루트 `package.json`의 `version`을 올린 뒤 실행합니다. 서명 키는 저장소 밖 속성 파일(`DOMO_SIGNING_PROPERTIES`)에서 읽습니다. 네이티브 빌드에는 `VITE_API_BASE`로 운영 API의 HTTPS 주소를 지정합니다. 로컬 설정값은 저장소에 커밋하지 않습니다.
+로컬에서 버전을 올리고 Git 태그를 푸시하면 GitHub Actions CI에서 서명 빌드 후 GitHub Releases에 APK를 자동 등록합니다.
 
-```bash
-pnpm release:android -- --notes "변경 내용"
-```
+1. 루트 `package.json`의 `version`을 올리고 커밋합니다.
+2. 새 버전 태그를 생성하고 푸시합니다.
+   ```bash
+   git tag v0.4.10
+   git push origin v0.4.10
+   ```
+3. GitHub Actions 워크플로(`release-android.yml`)가 실행되어 APK 빌드와 `도모 v0.4.10` 릴리스 등록을 완료합니다.
+
+> 수동 로컬 빌드로 릴리스를 올릴 때는 기존 `pnpm release:android` 명령을 계속 활용할 수 있습니다.
 
 앱은 시작할 때와 설정 화면에서 이 저장소의 최신 Release를 확인하여 업데이트를 안내합니다.
