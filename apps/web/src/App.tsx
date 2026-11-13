@@ -19,6 +19,7 @@ const StatsPage = lazy(() => import("./pages/stats/StatsPage.tsx").then((m) => (
 const PlanPage = lazy(() => import("./pages/stats/PlanPage.tsx").then((m) => ({ default: m.PlanPage })));
 const SearchPage = lazy(() => import("./pages/records/SearchPage.tsx").then((m) => ({ default: m.SearchPage })));
 const FamilyPage = lazy(() => import("./pages/records/FamilyPage.tsx").then((m) => ({ default: m.FamilyPage })));
+const CardReconciliationPage = lazy(() => import("./pages/records/CardReconciliationPage.tsx").then((m) => ({ default: m.CardReconciliationPage })));
 
 export function App() {
   const [signedIn, setSignedIn] = useState(() => !!session.get());
@@ -119,6 +120,7 @@ function SignedIn() {
     <Routes>
       <Route element={<AppShell me={me.data} />}>
         <Route path="/records" element={<RecordsPage />} />
+        <Route path="/card-reconciliation" element={<Suspense fallback={null}><CardReconciliationPage /></Suspense>} />
         <Route path="/stats" element={<Suspense fallback={null}><StatsPage /></Suspense>} />
         <Route path="/plan" element={<Suspense fallback={null}><PlanPage /></Suspense>} />
         <Route path="/search" element={<Suspense fallback={null}><SearchPage /></Suspense>} />

@@ -1,4 +1,4 @@
-import { CalendarDays, ChartPie, ChevronRight, LogOut, MessageCircle, NotebookPen, Settings } from "lucide-react";
+import { CalendarDays, ChartPie, ChevronRight, ClipboardCheck, LogOut, MessageCircle, NotebookPen, Settings } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { signOut } from "../lib/auth.ts";
@@ -15,6 +15,7 @@ import { currentYearMonth } from "@domo/core";
 const NAV = [
   { to: "/records", label: "입출기록", icon: NotebookPen },
   { to: "/plan", label: "생활비 계획", icon: CalendarDays },
+  { to: "/card-reconciliation", label: "카드내역 대사", icon: ClipboardCheck },
   { to: "/stats", label: "통계", icon: ChartPie },
   { to: "/family", label: "가족 소식", icon: MessageCircle },
   { to: "/settings", label: "설정", icon: Settings },
